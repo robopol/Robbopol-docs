@@ -1,0 +1,291 @@
+/* Basic Styles & Theme */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  --bg-body: #f0f0f0;
+  --text-body: #333;
+  --bg-paper: #fff;
+  --text-editor: #000;
+  --toolbar-bg: #fff;
+  --toolbar-border: #ccc;
+  --toolbar-btn-bg: #eee;
+  --toolbar-btn-hover: #ddd;
+  font-family: Arial, sans-serif;
+  background: var(--bg-body);
+  color: var(--text-body);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: background 0.3s, color 0.3s;
+  position: relative;
+  padding-bottom: 50px;
+}
+
+body.dark {
+  --bg-body: #242424;
+  --text-body: #ccc;
+  --bg-paper: #1e1e1e;
+  --text-editor: #f5f5f5;
+  --toolbar-bg: #333;
+  --toolbar-border: #666;
+  /* Override custom buttons for better visibility in dark mode */
+  --toolbar-btn-bg: #555;
+  --toolbar-btn-hover: #666;
+}
+
+/* Ensure Quill default icons are visible in dark mode */
+body.dark .ql-stroke {
+  stroke: #fff !important;
+}
+body.dark .ql-fill {
+  fill: #fff !important;
+}
+
+/* Top Bar */
+.top-bar {
+  width: 100%;
+  padding: 10px 20px;
+  background: var(--toolbar-bg);
+  border-bottom: 1px solid var(--toolbar-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.top-bar h1 {
+  font-size: 1.2rem;
+}
+
+.top-bar button {
+  cursor: pointer;
+  padding: 6px 12px;
+  background: #6c63ff;
+  color: #fff;
+  border: none;
+  border-radius: 3px;
+  transition: background 0.2s;
+  font-weight: 600;
+  margin-left: 5px;
+}
+
+.top-bar button:hover {
+  background: #5b54e6;
+}
+
+/* Toolbar Wrapper */
+.toolbar-wrapper {
+  width: 100%;
+  max-width: 1200px;
+  background: var(--toolbar-bg);
+  border: none;
+  border-top: none;
+  margin: 0 auto 20px auto;
+  transition: background 0.3s;
+  position: relative;
+}
+
+#toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  padding: 5px;
+}
+
+.ql-toolbar button,
+.ql-toolbar .ql-picker-label,
+.ql-toolbar .ql-picker-item,
+.ql-toolbar select {
+  background: var(--toolbar-btn-bg);
+  color: var(--text-body);
+  border: 1px solid var(--toolbar-border);
+  margin: 2px;
+  transition: background 0.2s;
+  cursor: pointer;
+}
+
+.ql-toolbar button:hover,
+.ql-toolbar .ql-picker-label:hover,
+.ql-toolbar .ql-picker-item:hover,
+.ql-toolbar select:hover {
+  background: var(--toolbar-btn-hover);
+}
+
+/* Custom Tools Styling */
+.custom-group {
+  display: flex;
+  align-items: center;
+  margin-left: 10px;
+}
+
+.custom-btn {
+  background: var(--toolbar-btn-bg);
+  color: var(--text-body);
+  border: 1px solid var(--toolbar-border);
+  margin: 2px;
+  padding: 6px 10px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.custom-btn:hover {
+  background: var(--toolbar-btn-hover);
+}
+
+/* Active state for custom buttons */
+.custom-btn.active {
+  background: #007bff;
+  color: #fff;
+  border-color: #0056b3;
+}
+
+/* A4 "Paper" */
+.paper {
+  position: relative;  
+  width: 210mm;        /* Šírka A4 */
+  min-height: 297mm;   /* Základná výška A4 */
+  margin: 0 auto 20px;
+  color: var(--text-editor);
+  box-shadow: 0 0 10px rgba(0,0,0,0.3);
+  transition: background 0.3s, color 0.3s;
+  
+  /* 1) basic background color */
+  background-color: var(--bg-paper);  
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0 296mm,               
+    rgba(251, 52, 2, 0.2) 296mm 297mm
+  );
+}
+
+.dynamic-height {  
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
+/* Remove scrollbars inside the editor */
+.ql-editor {
+  overflow: hidden !important;
+  border: none !important;
+  min-height: 274mm;
+}
+
+/* Margin Handles */
+.handle {
+  position: absolute;
+  background: rgba(0, 150, 255, 0.3);
+  z-index: 10;
+}
+
+#handleTop, #handleBottom {
+  left: 0;
+  right: 0;
+  height: 2px;
+  cursor: row-resize;
+}
+
+#handleLeft, #handleRight {
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  cursor: col-resize;
+}
+
+/* Editor Container */
+#editorContainer {
+  position: relative;
+  box-sizing: border-box;  
+}
+
+#editor {
+  min-height: 100%;
+  min-width: 100%;
+  padding: 5px;
+}
+
+/* Drawing Canvas */
+#drawingCanvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* Font Size & Family Classes */
+.ql-size-6px { font-size: 6px; }
+.ql-size-7px { font-size: 7px; }
+.ql-size-8px { font-size: 8px; }
+.ql-size-9px { font-size: 9px; }
+.ql-size-10px { font-size: 10px; }
+.ql-size-11px { font-size: 11px; }
+.ql-size-12px { font-size: 12px; }
+.ql-size-14px { font-size: 14px; }
+.ql-size-18px { font-size: 18px; }
+.ql-size-24px { font-size: 24px; }
+.ql-size-36px { font-size: 36px; }
+.ql-size-48px { font-size: 48px; }
+.ql-size-64px { font-size: 64px; }
+.ql-size-72px { font-size: 72px; }
+
+.ql-font-sans-serif { font-family: sans-serif; }
+.ql-font-serif { font-family: serif; }
+.ql-font-monospace { font-family: monospace; }
+.ql-font-arial { font-family: Arial, sans-serif; }
+.ql-font-times-new-roman { font-family: "Times New Roman", Times, serif; }
+.ql-font-comic-sans-ms { font-family: "Comic Sans MS", cursive, sans-serif; }
+.ql-font-courier-new { font-family: "Courier New", Courier, monospace; }
+.ql-font-georgia { font-family: Georgia, serif; }
+.ql-font-tahoma { font-family: Tahoma, sans-serif; }
+.ql-font-trebuchet-ms { font-family: "Trebuchet MS", sans-serif; }
+.ql-font-verdana { font-family: Verdana, sans-serif; }
+.ql-font-impact { font-family: Impact, sans-serif; }
+.ql-font-helvetica { font-family: Helvetica, sans-serif; }
+.ql-font-roboto { font-family: "Roboto", sans-serif; }
+.ql-font-calibri { font-family: Calibri, sans-serif; }
+
+.ql-toolbar.ql-snow + .ql-container.ql-snow {
+  border: none; 
+}
+
+/* Simple styling for the settings panel modal */
+.settings-panel {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--toolbar-bg);
+  border: 1px solid var(--toolbar-border);
+  padding: 20px;
+  z-index: 100;
+  box-shadow: 0 0 10px rgba(0,0,0,0.5);
+  max-width: 400px;
+  width: 90%;
+}
+
+.settings-panel h2 {
+  margin-bottom: 10px;
+}
+
+.settings-panel label {
+  display: block;
+  margin-top: 10px;
+}
+
+.settings-panel input,
+.settings-panel select {
+  width: 100%;
+  padding: 5px;
+  margin-top: 5px;
+  box-sizing: border-box;
+}
+
+.settings-panel button {
+  margin-top: 15px;
+  margin-right: 10px;
+  padding: 5px 10px;
+}

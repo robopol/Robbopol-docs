@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Robopol docs</title>
+  <link rel="icon" href="images/robot.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="styles.css">
+  
+  <!-- Quill CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/quill@2.0.0-beta.2/dist/quill.snow.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/quill@2.0.0-beta.2/dist/quill.snow.css" rel="stylesheet">
+  
+  <!-- Quill JS -->
+  <script src="https://cdn.jsdelivr.net/npm/quill@2.0.0-beta.2/dist/quill.min.js"></script>
+  
+  <!-- Only html2canvas and jsPDF are needed for PDF export -->
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <!-- Scripts for Word export and DOCX import -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.2/mammoth.browser.min.js"></script>
+  <script src="https://unpkg.com/docx@7.8.0/build/index.js"></script>
+  <!-- Image resize module for Quill -->
+  <script src="https://cdn.jsdelivr.net/npm/quill-image-resize-module@3.0.0/image-resize.min.js"></script>
+
+</head>
+<body>
+  <!-- Top Bar with Settings Button -->
+  <div class="top-bar">
+    <h1>
+      <i class="fa-solid fa-robot" style="margin-right: 8px;"></i>
+      Robopol docs
+    </h1>
+    <div class="buttons">      
+      <button id="themeToggle" title="Toggle Light/Dark Mode">Light / Dark</button>
+      <button id="pageColorBtn" title="Select Page Background Color">Page Color</button>
+      <button id="exportPDF" title="Export document as PDF">Export PDF</button>
+      <!-- Settings button added in top-bar -->
+      <button id="settingsBtn" title="Open Settings">
+        <i class="fa-solid fa-gear"></i>
+      </button>
+    </div>
+  </div>
+  
+  <!-- Hidden Settings Panel (modal) -->
+  <div id="settingsPanel" class="settings-panel" style="display: none;">
+    <h2>Editor Settings</h2>
+    
+    <!-- Heading Sizes -->
+    <label for="h1Size">H1 Size (px):</label>
+    <input type="number" id="h1Size" value="32">
+    
+    <label for="h2Size">H2 Size (px):</label>
+    <input type="number" id="h2Size" value="28">
+    
+    <label for="h3Size">H3 Size (px):</label>
+    <input type="number" id="h3Size" value="24">
+    
+    <label for="h4Size">H4 Size (px):</label>
+    <input type="number" id="h4Size" value="20">
+    
+    <label for="h5Size">H5 Size (px):</label>
+    <input type="number" id="h5Size" value="18">
+    
+    <label for="h6Size">H6 Size (px):</label>
+    <input type="number" id="h6Size" value="16">
+    
+    <label for="normalSize">Normal Text Size (px):</label>
+    <input type="number" id="normalSize" value="14">
+    
+    <!-- Additional formatting options -->
+    <label for="indent">Indent (px):</label>
+    <input type="number" id="indent" value="20">
+    
+    <label for="fontColor">Font Color:</label>
+    <input type="color" id="fontColor" value="#000000">
+    
+    <label for="fontFamily">Font Family:</label>
+    <select id="fontFamily">
+      <option value="Arial, sans-serif" selected>Arial</option>
+      <option value="'Times New Roman', serif">Times New Roman</option>
+      <option value="Courier, monospace">Courier</option>
+      <option value="Georgia, serif">Georgia</option>
+      <option value="Tahoma, sans-serif">Tahoma</option>
+      <option value="'Trebuchet MS', sans-serif">Trebuchet MS</option>
+      <option value="Verdana, sans-serif">Verdana</option>
+    </select>
+    
+    <button id="saveSettings">Save Settings</button>
+    <button id="closeSettings">Close</button>
+  </div>
+  
+  <!-- Hidden color input for page background color selection -->
+  <input type="color" id="hiddenPageColor" style="display: none;" value="#ffffff">
+  <!-- Hidden file input for opening DOCX files -->
+  <input type="file" id="docxInput" accept=".docx" style="display: none;">
+  <!-- Hidden file input for opening JSON files -->
+  <input type="file" id="jsonInput" accept=".json" style="display: none;">
+
+  <!-- Toolbar Wrapper with Quill Toolbar -->
+  <div class="toolbar-wrapper">
+    <div id="toolbar">
+      <!-- New Document button - placed at the beginning -->
+      <span class="custom-group">
+        <button id="newDocument" class="custom-btn" title="New Document">
+          <i class="fa-solid fa-file"></i>
+        </button>      
+        <button id="openDocument" class="custom-btn" title="Open Document">
+          <i class="fa-solid fa-folder-open"></i>
+        </button>
+        <button id="saveAsJSON" class="custom-btn" title="Save as JSON">
+          <i class="fa-solid fa-file-export"></i>
+        </button>
+        <button id="saveAsDocument" class="custom-btn" title="Save as DOCX">
+          <i class="fa-solid fa-save"></i>
+        </button>        
+      </span>
+
+      <!-- Additional Custom Tools -->
+      <span class="custom-group">
+        <button id="undoBtn" class="custom-btn" title="Undo">
+          <i class="fa-solid fa-rotate-left"></i>
+        </button>
+        <button id="redoBtn" class="custom-btn" title="Redo">
+          <i class="fa-solid fa-rotate-right"></i>
+        </button>
+      </span>
+
+      <!-- Standard Quill Toolbar Elements -->
+      <select class="ql-font" title="Select Font">
+        <option value="sans-serif" selected>Sans Serif</option>
+        <option value="serif">Serif</option>
+        <option value="monospace">Monospace</option>
+        <option value="arial">Arial</option>
+        <option value="times-new-roman">Times New Roman</option>
+        <option value="comic-sans-ms">Comic Sans MS</option>
+        <option value="courier-new">Courier New</option>
+        <option value="georgia">Georgia</option>
+        <option value="tahoma">Tahoma</option>
+        <option value="trebuchet-ms">Trebuchet MS</option>
+        <option value="verdana">Verdana</option>
+        <option value="impact">Impact</option>
+        <option value="helvetica">Helvetica</option>
+        <option value="roboto">Roboto</option>
+        <option value="calibri">Calibri</option>
+      </select>
+
+      <select class="ql-size" title="Select Font Size">
+        <option value="6px">6 px</option>
+        <option value="7px">7 px</option>
+        <option value="8px">8 px</option>
+        <option value="6px">9 px</option>
+        <option value="10px">10 px</option>
+        <option value="6px">11 px</option>
+        <option value="12px" selected>12 px</option>
+        <option value="14px">14 px</option>
+        <option value="18px">18 px</option>
+        <option value="24px">24 px</option>
+        <option value="36px">36 px</option>
+        <option value="48px">48 px</option>
+        <option value="64px">64 px</option>
+        <option value="72px">72 px</option>
+      </select>
+      
+      <select class="ql-header" title="Select Header Level">
+        <option value="1">Heading 1</option>
+        <option value="2">Heading 2</option>
+        <option value="3">Heading 3</option>
+        <option value="4">Heading 4</option>
+        <option value="5">Heading 5</option>
+        <option value="6">Heading 6</option>
+        <option value="" selected>Normal</option>
+      </select>
+
+      <button class="ql-bold" title="Bold"></button>
+      <button class="ql-italic" title="Italic"></button>
+      <button class="ql-underline" title="Underline"></button>
+      <button class="ql-strike" title="Strike Through"></button>
+
+      <select class="ql-color" title="Text Color"></select>
+      <select class="ql-background" title="Background Color"></select>
+
+      <button class="ql-list" value="ordered" title="Ordered List"></button>
+      <button class="ql-list" value="bullet" title="Bullet List"></button>
+
+      <button class="ql-indent" value="-1" title="Decrease Indent"></button>
+      <button class="ql-indent" value="+1" title="Increase Indent"></button>
+
+      <select class="ql-align" title="Text Alignment"></select>
+
+      <button class="ql-link" title="Insert Link"></button>
+      <button class="ql-image" title="Insert Image"></button>
+      <button class="ql-video" title="Insert Video"></button>      
+
+      <span class="custom-group">
+        <button id="toggleDraw" class="custom-btn" title="Toggle Draw Mode">
+          <i class="fa-solid fa-pen"></i>
+        </button>
+        <button id="drawLine" class="custom-btn" title="Draw Line">
+          <i class="fa-solid fa-minus"></i>
+        </button>
+        <button id="clearDrawing" class="custom-btn" title="Clear Drawing">
+          <i class="fa-solid fa-eraser"></i>
+        </button>
+        <button id="toggleTextMode" class="custom-btn" title="Switch to Text Mode">
+          <i class="fa-solid fa-i-cursor"></i>
+        </button>
+        <button id="wordCountBtn" class="custom-btn" title="Word Count">
+          <i class="fa-solid fa-calculator"></i>
+        </button>
+        <button id="insertTable" class="custom-btn" title="Insert Table">
+          <i class="fa-solid fa-table"></i>
+        </button>
+      </span>      
+    </div>
+  </div>
+
+  <!-- A4 "Paper" -->
+  <div class="paper" id="paper">
+    <div id="handleTop" class="handle"></div>
+    <div id="handleBottom" class="handle"></div>
+    <div id="handleLeft" class="handle"></div>
+    <div id="handleRight" class="handle"></div>
+
+    <!-- Inner text container (Quill) -->
+    <div id="editorContainer">
+      <div id="editor">
+        <p></p>
+      </div>
+    </div>
+    
+    <!-- Drawing canvas -->
+    <canvas id="drawingCanvas"></canvas>
+  </div>
+
+  <!-- Scripts -->
+  <script src="app.js"></script>
+</body>
+</html>

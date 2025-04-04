@@ -3,7 +3,47 @@
 <head>
   <meta charset="UTF-8">
   <title>Robopol docs</title>
-  <link rel="icon" href="images/robot.svg" type="image/svg+xml">
+  <meta name="description" content="Robopol docs - professional online text editor with advanced features for creating and editing documents">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="keywords" content="robopol, documents, online editor, text editor, pdf export, json export">
+  <meta name="author" content="Robopol">
+  <meta name="robots" content="index, follow">
+  
+  <!-- Canonical URL -->
+  <link rel="canonical" href="https://robopol.com/docs">
+  
+  <!-- Open Graph Meta Tags -->
+  <meta property="og:title" content="Robopol docs - Advanced online text editor">
+  <meta property="og:description" content="Create and edit professional documents with advanced features and export them to various formats">
+  <meta property="og:image" content="https://robopol.com/images/robopol-docs-preview.jpg">
+  <meta property="og:url" content="https://robopol.com/docs">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Robopol docs">
+  
+  <!-- Twitter Card Meta Tags -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Robopol docs - Advanced online text editor">
+  <meta name="twitter:description" content="Create and edit professional documents with advanced features and export them to various formats">
+  <meta name="twitter:image" content="https://robopol.com/images/robopol-docs-preview.jpg">
+  
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Robopol docs",
+    "applicationCategory": "DocumentEditor",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "operatingSystem": "Any",
+    "description": "Advanced online text editor for creating and editing professional documents"
+  }
+  </script>
+  
+  <link rel="icon" href="images/document-icon-colored.svg" type="image/svg+xml">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="styles.css">
   
@@ -17,26 +57,23 @@
   <!-- Only html2canvas and jsPDF are needed for PDF export -->
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-  <!-- Scripts for Word export and DOCX import -->
+  <!-- FileSaver for JSON export -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
   
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.2/mammoth.browser.min.js"></script>
-  <script src="https://unpkg.com/docx@7.8.0/build/index.js"></script>
-  <!-- Image resize module for Quill -->
-  <script src="https://cdn.jsdelivr.net/npm/quill-image-resize-module@3.0.0/image-resize.min.js"></script>
-
+  <!-- Note: Image resize module was removed due to compatibility issues with Quill 2.0.0-beta.2 -->
+  
 </head>
 <body>
   <!-- Top Bar with Settings Button -->
   <div class="top-bar">
     <h1>
-      <i class="fa-solid fa-robot" style="margin-right: 8px;"></i>
-      Robopol docs
+      <i class="fa-solid fa-file-lines"></i>
+      Robopol <span style="color: var(--accent); font-weight: 800;">docs</span>
     </h1>
     <div class="buttons">      
-      <button id="themeToggle" title="Toggle Light/Dark Mode">Light / Dark</button>
-      <button id="pageColorBtn" title="Select Page Background Color">Page Color</button>
-      <button id="exportPDF" title="Export document as PDF">Export PDF</button>
+      <button id="themeToggle" title="Toggle Light/Dark Mode"><i class="fa-solid fa-moon"></i> / <i class="fa-solid fa-sun"></i></button>
+      <button id="pageColorBtn" title="Select Page Background Color"><i class="fa-solid fa-palette"></i></button>
+      <button id="exportPDF" title="Export document as PDF"><i class="fa-solid fa-file-pdf"></i></button>
       <!-- Settings button added in top-bar -->
       <button id="settingsBtn" title="Open Settings">
         <i class="fa-solid fa-gear"></i>
@@ -44,64 +81,254 @@
     </div>
   </div>
   
-  <!-- Hidden Settings Panel (modal) -->
+  <!-- Updated Settings Panel (modal) -->
   <div id="settingsPanel" class="settings-panel" style="display: none;">
     <h2>Editor Settings</h2>
     
-    <!-- Heading Sizes -->
-    <label for="h1Size">H1 Size (px):</label>
-    <input type="number" id="h1Size" value="32">
+    <div class="settings-tabs">
+      <button class="tab-btn active" data-tab="sizes">Sizes</button>
+      <button class="tab-btn" data-tab="colors">Colors</button>
+      <button class="tab-btn" data-tab="fonts">Fonts</button>
+    </div>
     
-    <label for="h2Size">H2 Size (px):</label>
-    <input type="number" id="h2Size" value="28">
+    <div id="sizesTab" class="tab-content active">
+      <!-- Heading Sizes -->
+      <label for="h1Size">H1 Size (px):</label>
+      <input type="number" id="h1Size" value="32">
+      
+      <label for="h2Size">H2 Size (px):</label>
+      <input type="number" id="h2Size" value="28">
+      
+      <label for="h3Size">H3 Size (px):</label>
+      <input type="number" id="h3Size" value="24">
+      
+      <label for="h4Size">H4 Size (px):</label>
+      <input type="number" id="h4Size" value="20">
+      
+      <label for="h5Size">H5 Size (px):</label>
+      <input type="number" id="h5Size" value="18">
+      
+      <label for="h6Size">H6 Size (px):</label>
+      <input type="number" id="h6Size" value="16">
+      
+      <label for="normalSize">Normal Text Size (px):</label>
+      <input type="number" id="normalSize" value="14">
+      
+      <label for="indent">Indent (px):</label>
+      <input type="number" id="indent" value="20">
+    </div>
     
-    <label for="h3Size">H3 Size (px):</label>
-    <input type="number" id="h3Size" value="24">
+    <div id="colorsTab" class="tab-content">
+      <!-- Text Colors -->
+      <label for="fontColor">Normal Text Color:</label>
+      <input type="color" id="fontColor" value="#000000">
+      
+      <label for="h1Color">H1 Color:</label>
+      <input type="color" id="h1Color" value="#000000">
+      
+      <label for="h2Color">H2 Color:</label>
+      <input type="color" id="h2Color" value="#000000">
+      
+      <label for="h3Color">H3 Color:</label>
+      <input type="color" id="h3Color" value="#000000">
+      
+      <label for="h4Color">H4 Color:</label>
+      <input type="color" id="h4Color" value="#000000">
+      
+      <label for="h5Color">H5 Color:</label>
+      <input type="color" id="h5Color" value="#000000">
+      
+      <label for="h6Color">H6 Color:</label>
+      <input type="color" id="h6Color" value="#000000">
+      
+      <label for="linkColor">Link Color:</label>
+      <input type="color" id="linkColor" value="#0000FF">
+    </div>
     
-    <label for="h4Size">H4 Size (px):</label>
-    <input type="number" id="h4Size" value="20">
+    <div id="fontsTab" class="tab-content">
+      <!-- Font Family -->
+      <label for="fontFamily">Default Font Family:</label>
+      <select id="fontFamily">
+        <option value="Arial, sans-serif" selected>Arial</option>
+        <option value="'Times New Roman', serif">Times New Roman</option>
+        <option value="Courier, monospace">Courier</option>
+        <option value="Georgia, serif">Georgia</option>
+        <option value="Tahoma, sans-serif">Tahoma</option>
+        <option value="'Trebuchet MS', sans-serif">Trebuchet MS</option>
+        <option value="Verdana, sans-serif">Verdana</option>
+      </select>
+      
+      <label for="h1Font">H1 Font Family:</label>
+      <select id="h1Font">
+        <option value="inherit" selected>Same as Default</option>
+        <option value="Arial, sans-serif">Arial</option>
+        <option value="'Times New Roman', serif">Times New Roman</option>
+        <option value="Courier, monospace">Courier</option>
+        <option value="Georgia, serif">Georgia</option>
+        <option value="Tahoma, sans-serif">Tahoma</option>
+        <option value="'Trebuchet MS', sans-serif">Trebuchet MS</option>
+        <option value="Verdana, sans-serif">Verdana</option>
+      </select>
+      
+      <label for="headingWeight">Heading Weight:</label>
+      <select id="headingWeight">
+        <option value="normal">Normal</option>
+        <option value="bold" selected>Bold</option>
+        <option value="bolder">Bolder</option>
+        <option value="lighter">Lighter</option>
+      </select>
+    </div>
     
-    <label for="h5Size">H5 Size (px):</label>
-    <input type="number" id="h5Size" value="18">
+    <div class="settings-footer">
+      <button id="saveSettings" class="primary-btn">Save Settings</button>
+      <button id="closeSettings">Close</button>
+      <button id="resetSettings" class="danger-btn">Reset to Defaults</button>
+    </div>
+  </div>
+  
+  <!-- New Drawing Settings Panel -->
+  <div id="drawingPanel" class="settings-panel drawing-panel" style="display: none;">
+    <h2>Drawing Tools</h2>
     
-    <label for="h6Size">H6 Size (px):</label>
-    <input type="number" id="h6Size" value="16">
+    <div class="settings-tabs">
+      <button class="tab-btn active" data-tab="pen">Pen</button>
+      <button class="tab-btn" data-tab="line">Line</button>
+      <button class="tab-btn" data-tab="eraser">Eraser</button>
+      <button class="tab-btn" data-tab="shapes">Shapes</button>
+    </div>
     
-    <label for="normalSize">Normal Text Size (px):</label>
-    <input type="number" id="normalSize" value="14">
+    <div id="penTab" class="tab-content active">
+      <label for="penSize">Pen Size:</label>
+      <div class="slider-container">
+        <input type="range" id="penSize" min="1" max="20" value="2" class="slider">
+        <span id="penSizeValue">2px</span>
+      </div>
+      
+      <label for="penColor">Pen Color:</label>
+      <input type="color" id="penColor" value="#000000">
+      
+      <label for="penOpacity">Opacity:</label>
+      <div class="slider-container">
+        <input type="range" id="penOpacity" min="10" max="100" value="100" class="slider">
+        <span id="penOpacityValue">100%</span>
+      </div>
+      
+      <label for="penStyle">Line Style:</label>
+      <select id="penStyle">
+        <option value="solid" selected>Solid</option>
+        <option value="dashed">Dashed</option>
+        <option value="dotted">Dotted</option>
+      </select>
+    </div>
     
-    <!-- Additional formatting options -->
-    <label for="indent">Indent (px):</label>
-    <input type="number" id="indent" value="20">
+    <div id="lineTab" class="tab-content">
+      <label for="lineSize">Line Size:</label>
+      <div class="slider-container">
+        <input type="range" id="lineSize" min="1" max="20" value="2" class="slider">
+        <span id="lineSizeValue">2px</span>
+      </div>
+      
+      <label for="lineColor">Line Color:</label>
+      <input type="color" id="lineColor" value="#000000">
+      
+      <label for="lineOpacity">Opacity:</label>
+      <div class="slider-container">
+        <input type="range" id="lineOpacity" min="10" max="100" value="100" class="slider">
+        <span id="lineOpacityValue">100%</span>
+      </div>
+      
+      <label for="lineStyle">Line Style:</label>
+      <select id="lineStyle">
+        <option value="solid" selected>Solid</option>
+        <option value="dashed">Dashed</option>
+        <option value="dotted">Dotted</option>
+      </select>
+      
+      <label for="lineArrow">Arrow:</label>
+      <select id="lineArrow">
+        <option value="none" selected>None</option>
+        <option value="start">Start</option>
+        <option value="end">End</option>
+        <option value="both">Both</option>
+      </select>
+    </div>
     
-    <label for="fontColor">Font Color:</label>
-    <input type="color" id="fontColor" value="#000000">
+    <div id="eraserTab" class="tab-content">
+      <label for="eraserSize">Eraser Size:</label>
+      <div class="slider-container">
+        <input type="range" id="eraserSize" min="5" max="50" value="10" class="slider">
+        <span id="eraserSizeValue">10px</span>
+      </div>
+      
+      <div class="checkbox-container">
+        <input type="checkbox" id="preciseEraser">
+        <label for="preciseEraser">Precise eraser (erase specific lines)</label>
+      </div>
+    </div>
     
-    <label for="fontFamily">Font Family:</label>
-    <select id="fontFamily">
-      <option value="Arial, sans-serif" selected>Arial</option>
-      <option value="'Times New Roman', serif">Times New Roman</option>
-      <option value="Courier, monospace">Courier</option>
-      <option value="Georgia, serif">Georgia</option>
-      <option value="Tahoma, sans-serif">Tahoma</option>
-      <option value="'Trebuchet MS', sans-serif">Trebuchet MS</option>
-      <option value="Verdana, sans-serif">Verdana</option>
-    </select>
+    <div id="shapesTab" class="tab-content">
+      <div class="shape-selector">
+        <div class="shape-option" data-shape="rectangle">
+          <i class="fa-regular fa-square"></i>
+          <span>Rectangle</span>
+        </div>
+        <div class="shape-option" data-shape="circle">
+          <i class="fa-regular fa-circle"></i>
+          <span>Circle</span>
+        </div>
+        <div class="shape-option" data-shape="triangle">
+          <i class="fa-solid fa-play fa-rotate-270"></i>
+          <span>Triangle</span>
+        </div>
+        <div class="shape-option" data-shape="arrow">
+          <i class="fa-solid fa-arrow-right"></i>
+          <span>Arrow</span>
+        </div>
+      </div>
+      
+      <label for="shapeStrokeSize">Stroke Size:</label>
+      <div class="slider-container">
+        <input type="range" id="shapeStrokeSize" min="1" max="10" value="2" class="slider">
+        <span id="shapeStrokeSizeValue">2px</span>
+      </div>
+      
+      <label for="shapeStrokeColor">Stroke Color:</label>
+      <input type="color" id="shapeStrokeColor" value="#000000">
+      
+      <label for="shapeFillColor">Fill Color:</label>
+      <input type="color" id="shapeFillColor" value="#ffffff">
+      
+      <div class="checkbox-container">
+        <input type="checkbox" id="shapeFilled" checked>
+        <label for="shapeFilled">Fill shape</label>
+      </div>
+    </div>
     
-    <button id="saveSettings">Save Settings</button>
-    <button id="closeSettings">Close</button>
+    <div class="settings-footer">
+      <div class="drawing-actions">
+        <button id="clearAllDrawing" class="danger-btn">Clear All Drawings</button>
+        <button id="undoDrawing" title="Undo last drawing action">
+          <i class="fa-solid fa-rotate-left"></i>
+        </button>
+        <button id="redoDrawing" title="Redo drawing action">
+          <i class="fa-solid fa-rotate-right"></i>
+        </button>
+      </div>
+      <div>
+        <button id="applyDrawingSettings" class="primary-btn">Apply & Draw</button>
+        <button id="closeDrawingPanel">Cancel</button>
+      </div>
+    </div>
   </div>
   
   <!-- Hidden color input for page background color selection -->
   <input type="color" id="hiddenPageColor" style="display: none;" value="#ffffff">
-  <!-- Hidden file input for opening DOCX files -->
-  <input type="file" id="docxInput" accept=".docx" style="display: none;">
   <!-- Hidden file input for opening JSON files -->
   <input type="file" id="jsonInput" accept=".json" style="display: none;">
 
   <!-- Toolbar Wrapper with Quill Toolbar -->
   <div class="toolbar-wrapper">
-    <div id="toolbar">
+    <div id="toolbar" class="toolbar">
       <!-- New Document button - placed at the beginning -->
       <span class="custom-group">
         <button id="newDocument" class="custom-btn" title="New Document">
@@ -111,11 +338,8 @@
           <i class="fa-solid fa-folder-open"></i>
         </button>
         <button id="saveAsJSON" class="custom-btn" title="Save as JSON">
-          <i class="fa-solid fa-file-export"></i>
-        </button>
-        <button id="saveAsDocument" class="custom-btn" title="Save as DOCX">
           <i class="fa-solid fa-save"></i>
-        </button>        
+        </button>      
       </span>
 
       <!-- Additional Custom Tools -->
@@ -129,6 +353,8 @@
       </span>
 
       <!-- Standard Quill Toolbar Elements -->
+      <span class="toolbar-divider"></span>
+      
       <select class="ql-font" title="Select Font">
         <option value="sans-serif" selected>Sans Serif</option>
         <option value="serif">Serif</option>
@@ -174,13 +400,19 @@
         <option value="" selected>Normal</option>
       </select>
 
+      <span class="toolbar-divider"></span>
+
       <button class="ql-bold" title="Bold"></button>
       <button class="ql-italic" title="Italic"></button>
       <button class="ql-underline" title="Underline"></button>
       <button class="ql-strike" title="Strike Through"></button>
 
+      <span class="toolbar-divider"></span>
+
       <select class="ql-color" title="Text Color"></select>
       <select class="ql-background" title="Background Color"></select>
+
+      <span class="toolbar-divider"></span>
 
       <button class="ql-list" value="ordered" title="Ordered List"></button>
       <button class="ql-list" value="bullet" title="Bullet List"></button>
@@ -188,25 +420,17 @@
       <button class="ql-indent" value="-1" title="Decrease Indent"></button>
       <button class="ql-indent" value="+1" title="Increase Indent"></button>
 
+      <span class="toolbar-divider"></span>
+
       <select class="ql-align" title="Text Alignment"></select>
+
+      <span class="toolbar-divider"></span>
 
       <button class="ql-link" title="Insert Link"></button>
       <button class="ql-image" title="Insert Image"></button>
       <button class="ql-video" title="Insert Video"></button>      
 
       <span class="custom-group">
-        <button id="toggleDraw" class="custom-btn" title="Toggle Draw Mode">
-          <i class="fa-solid fa-pen"></i>
-        </button>
-        <button id="drawLine" class="custom-btn" title="Draw Line">
-          <i class="fa-solid fa-minus"></i>
-        </button>
-        <button id="clearDrawing" class="custom-btn" title="Clear Drawing">
-          <i class="fa-solid fa-eraser"></i>
-        </button>
-        <button id="toggleTextMode" class="custom-btn" title="Switch to Text Mode">
-          <i class="fa-solid fa-i-cursor"></i>
-        </button>
         <button id="wordCountBtn" class="custom-btn" title="Word Count">
           <i class="fa-solid fa-calculator"></i>
         </button>
@@ -214,6 +438,24 @@
           <i class="fa-solid fa-table"></i>
         </button>
       </span>      
+      
+      <span class="toolbar-divider"></span>
+      
+      <!-- Drawing Tools moved into the main toolbar -->
+      <div class="action-group">
+        <button id="toggleDraw" title="Drawing mode">
+          <i class="fa-solid fa-pen"></i>
+        </button>
+        <button id="drawLine" title="Draw line">
+          <i class="fa-solid fa-minus"></i>
+        </button>
+        <button id="clearDrawing" title="Eraser">
+          <i class="fa-solid fa-eraser"></i>
+        </button>
+        <button id="toggleTextMode" title="Text mode">
+          <i class="fa-solid fa-font"></i>
+        </button>
+      </div>
     </div>
   </div>
 
@@ -237,5 +479,39 @@
 
   <!-- Scripts -->
   <script src="app.js"></script>
+
+  <!-- Table Selector Modal -->
+  <div id="tableModal" class="modal-panel">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Insert Table</h2>
+        <button id="closeTableModal" class="close-btn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="table-options">
+          <div class="table-size-inputs">
+            <div class="table-input-group">
+              <label for="customRows">Rows:</label>
+              <input type="number" id="customRows" min="1" max="20" value="3">
+            </div>
+            <div class="table-input-group">
+              <label for="customCols">Columns:</label>
+              <input type="number" id="customCols" min="1" max="20" value="3">
+            </div>
+          </div>
+          
+          <div class="checkbox-wrapper">
+            <input type="checkbox" id="tableHeaderRow"> 
+            <label for="tableHeaderRow">Include header row</label>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="cancelTableBtn" class="cancel-btn">Cancel</button>
+        <button id="insertTableBtn" class="primary-btn">Insert Table</button>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>

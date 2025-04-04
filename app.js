@@ -11,6 +11,126 @@ let Size = Quill.import('formats/size');
 Size.whitelist = ['6px','7px','8px','9px','10px','11px','12px','14px','18px','24px','36px','48px','64px','72px'];
 Quill.register(Size, true);
 
+// Custom Image Resize Handler for Quill 2.0
+class ImageResizeHandler {
+  constructor(quill) {
+    this.quill = quill;
+    this.currentImage = null;
+    this.overlay = null;
+    this.resizeHandles = [];
+    
+    // Initialize the module
+    this.initialize();
+  }
+  
+  initialize() {
+    // Listen for image clicks in the editor
+    this.quill.root.addEventListener('click', (event) => {
+      const image = event.target.closest('img');
+      if (image) {
+        this.selectImage(image);
+      } else if (this.currentImage && !event.target.closest('.image-resize-overlay')) {
+        this.deselect();
+      }
+    });
+  }
+  
+  selectImage(image) {
+    if (this.currentImage === image) return;
+    
+    // Deselect any currently selected image
+    this.deselect();
+    
+    // Set current image
+    this.currentImage = image;
+    
+    // Create overlay and resize handles
+    this.createOverlay();
+  }
+  
+  deselect() {
+    if (!this.currentImage) return;
+    
+    // Remove overlay and handles
+    if (this.overlay) {
+      document.body.removeChild(this.overlay);
+      this.overlay = null;
+    }
+    
+    this.currentImage = null;
+  }
+  
+  createOverlay() {
+    // Get image position and dimensions
+    const rect = this.currentImage.getBoundingClientRect();
+    
+    // Create overlay
+    this.overlay = document.createElement('div');
+    this.overlay.className = 'image-resize-overlay';
+    this.overlay.style.position = 'absolute';
+    this.overlay.style.top = `${rect.top + window.scrollY}px`;
+    this.overlay.style.left = `${rect.left + window.scrollX}px`;
+    this.overlay.style.width = `${rect.width}px`;
+    this.overlay.style.height = `${rect.height}px`;
+    this.overlay.style.border = '1px dashed #3498db';
+    this.overlay.style.pointerEvents = 'none';
+    this.overlay.style.zIndex = '100';
+    
+    // Create resize handle
+    const handle = document.createElement('div');
+    handle.className = 'image-resize-handle';
+    handle.style.position = 'absolute';
+    handle.style.bottom = '-10px';
+    handle.style.right = '-10px';
+    handle.style.width = '20px';
+    handle.style.height = '20px';
+    handle.style.backgroundColor = '#3498db';
+    handle.style.cursor = 'nwse-resize';
+    handle.style.borderRadius = '50%';
+    handle.style.pointerEvents = 'all';
+    
+    // Add resize functionality
+    handle.addEventListener('mousedown', this.startResize.bind(this));
+    
+    this.overlay.appendChild(handle);
+    document.body.appendChild(this.overlay);
+  }
+  
+  startResize(event) {
+    event.preventDefault();
+    
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const startWidth = this.currentImage.width;
+    const startHeight = this.currentImage.height;
+    
+    const moveHandler = (moveEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const deltaY = moveEvent.clientY - startY;
+      
+      // Calculate new dimensions while maintaining aspect ratio
+      const aspectRatio = startWidth / startHeight;
+      let newWidth = startWidth + deltaX;
+      let newHeight = newWidth / aspectRatio;
+      
+      // Update image size
+      this.currentImage.width = newWidth;
+      this.currentImage.height = newHeight;
+      
+      // Update overlay position and size
+      this.overlay.style.width = `${newWidth}px`;
+      this.overlay.style.height = `${newHeight}px`;
+    };
+    
+    const upHandler = () => {
+      document.removeEventListener('mousemove', moveHandler);
+      document.removeEventListener('mouseup', upHandler);
+    };
+    
+    document.addEventListener('mousemove', moveHandler);
+    document.addEventListener('mouseup', upHandler);
+  }
+}
 
 // Initialize Quill editor with history
 let quill = new Quill('#editor', {
@@ -20,6 +140,60 @@ let quill = new Quill('#editor', {
   },
   theme: 'snow'
 });
+
+// Initialize custom image resize handler
+const imageResizeHandler = new ImageResizeHandler(quill);
+
+// Add keyboard event handler for deleting images and tables with Delete key
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Delete') {
+    const range = quill.getSelection();
+    if (!range) return;
+    
+    // Check if an image is currently selected
+    if (imageResizeHandler.currentImage) {
+      // Remove the image
+      imageResizeHandler.currentImage.remove();
+      imageResizeHandler.deselect();
+      e.preventDefault();
+      return;
+    }
+    
+    // Check if a table or inside a table
+    const [table, tableCell] = findTableOrCell(range.index);
+    if (table) {
+      // If inside a table cell with text selected, let the default behavior handle it
+      if (tableCell && range.length > 0) return;
+      
+      // Otherwise, remove the entire table
+      table.remove();
+      e.preventDefault();
+    }
+  }
+});
+
+// Helper function to find a table or table cell at a given position
+function findTableOrCell(index) {
+  const [leaf, offset] = quill.getLeaf(index);
+  if (!leaf) return [null, null];
+  
+  let node = leaf.domNode;
+  let table = null;
+  let cell = null;
+  
+  // Traverse up the DOM to find table or cell
+  while (node && node !== quill.root) {
+    if (node.tagName === 'TABLE') {
+      table = node;
+    }
+    if (node.tagName === 'TD' || node.tagName === 'TH') {
+      cell = node;
+    }
+    node = node.parentNode;
+  }
+  
+  return [table, cell];
+}
 
 const undoBtn = document.getElementById('undoBtn');
 const redoBtn = document.getElementById('redoBtn');
@@ -39,11 +213,9 @@ if (redoBtn) {
 document.getElementById('themeToggle').addEventListener('click', () => {
   document.body.classList.toggle('dark');
   const editorEl = document.getElementById('editor');
-  if (document.body.classList.contains("dark")) {
-    editorEl.style.color = "#f5f5f5";
-  } else {
-    editorEl.style.color = editorFontColor || "#000000";
-  }
+  
+  // Apply appropriate text colors based on theme
+  updateEditorColors();
 });
 
 // Page background color via hidden color input triggered by "Page Color" button
@@ -177,37 +349,250 @@ updateLayout();
 
 // Global drawing variables
 let drawingMode = false;
-let currentShape = 'freehand'; // 'freehand', 'line', or 'eraser'
+let currentShape = 'freehand'; // 'freehand', 'line', 'eraser', 'rectangle', 'circle', etc.
 let isDrawing = false;
 let startX = 0, startY = 0;
 let currentPath = [];
 let shapes = [];
+let drawingHistory = [];
+let redoStack = [];
+let selectedShapeIndex = -1; // Track the currently selected shape
+let isDragging = false; // Flag indicating if we're dragging a shape
+let dragStartX = 0, dragStartY = 0; // Starting position for drag
 
 const canvas = document.getElementById('drawingCanvas');
 const ctx = canvas.getContext('2d');
 
-// Global settings for freehand drawing
-let customFreehandLineWidth = 2;
-let customFreehandLineColor = "#000000";
+// Advanced drawing settings
+let penSettings = {
+  size: 2,
+  color: "#000000",
+  opacity: 100,
+  style: "solid"
+};
 
-// Global settings for straight lines
-let customLineWidth = 2;
-let customLineColor = "#000000";
+let lineSettings = {
+  size: 2,
+  color: "#000000",
+  opacity: 100,
+  style: "solid",
+  arrow: "none"
+};
 
-// Global eraser setting
-let eraserLineWidth = 10;
+let eraserSettings = {
+  size: 10,
+  precise: false
+};
+
+let shapeSettings = {
+  type: "rectangle",
+  strokeSize: 2,
+  strokeColor: "#000000",
+  fillColor: "#ffffff",
+  filled: true
+};
+
+// Function to update UI based on current settings
+function updateDrawingPanelUI() {
+  // Pen tab
+  document.getElementById('penSize').value = penSettings.size;
+  document.getElementById('penSizeValue').textContent = penSettings.size + 'px';
+  document.getElementById('penColor').value = penSettings.color;
+  document.getElementById('penOpacity').value = penSettings.opacity;
+  document.getElementById('penOpacityValue').textContent = penSettings.opacity + '%';
+  document.getElementById('penStyle').value = penSettings.style;
+  
+  // Line tab
+  document.getElementById('lineSize').value = lineSettings.size;
+  document.getElementById('lineSizeValue').textContent = lineSettings.size + 'px';
+  document.getElementById('lineColor').value = lineSettings.color;
+  document.getElementById('lineOpacity').value = lineSettings.opacity;
+  document.getElementById('lineOpacityValue').textContent = lineSettings.opacity + '%';
+  document.getElementById('lineStyle').value = lineSettings.style;
+  document.getElementById('lineArrow').value = lineSettings.arrow;
+  
+  // Eraser tab
+  document.getElementById('eraserSize').value = eraserSettings.size;
+  document.getElementById('eraserSizeValue').textContent = eraserSettings.size + 'px';
+  document.getElementById('preciseEraser').checked = eraserSettings.precise;
+  
+  // Shapes tab
+  document.querySelectorAll('.shape-option').forEach(option => {
+    option.classList.remove('active');
+    if (option.getAttribute('data-shape') === shapeSettings.type) {
+      option.classList.add('active');
+    }
+  });
+  document.getElementById('shapeStrokeSize').value = shapeSettings.strokeSize;
+  document.getElementById('shapeStrokeSizeValue').textContent = shapeSettings.strokeSize + 'px';
+  document.getElementById('shapeStrokeColor').value = shapeSettings.strokeColor;
+  document.getElementById('shapeFillColor').value = shapeSettings.fillColor;
+  document.getElementById('shapeFilled').checked = shapeSettings.filled;
+}
+
+// Function to read values from UI and update settings
+function readDrawingPanelValues() {
+  // Determine which tab is active to update the appropriate settings
+  const activeTab = document.querySelector('.drawing-panel .tab-btn.active').getAttribute('data-tab');
+  
+  if (activeTab === 'pen') {
+    penSettings.size = parseInt(document.getElementById('penSize').value);
+    penSettings.color = document.getElementById('penColor').value;
+    penSettings.opacity = parseInt(document.getElementById('penOpacity').value);
+    penSettings.style = document.getElementById('penStyle').value;
+    currentShape = 'freehand';
+    customFreehandLineWidth = penSettings.size;
+    customFreehandLineColor = penSettings.color;
+  } 
+  else if (activeTab === 'line') {
+    lineSettings.size = parseInt(document.getElementById('lineSize').value);
+    lineSettings.color = document.getElementById('lineColor').value;
+    lineSettings.opacity = parseInt(document.getElementById('lineOpacity').value);
+    lineSettings.style = document.getElementById('lineStyle').value;
+    lineSettings.arrow = document.getElementById('lineArrow').value;
+    currentShape = 'line';
+    customLineWidth = lineSettings.size;
+    customLineColor = lineSettings.color;
+  } 
+  else if (activeTab === 'eraser') {
+    eraserSettings.size = parseInt(document.getElementById('eraserSize').value);
+    eraserSettings.precise = document.getElementById('preciseEraser').checked;
+    currentShape = 'eraser';
+    eraserLineWidth = eraserSettings.size;
+  } 
+  else if (activeTab === 'shapes') {
+    shapeSettings.strokeSize = parseInt(document.getElementById('shapeStrokeSize').value);
+    shapeSettings.strokeColor = document.getElementById('shapeStrokeColor').value;
+    shapeSettings.fillColor = document.getElementById('shapeFillColor').value;
+    shapeSettings.filled = document.getElementById('shapeFilled').checked;
+    
+    // Get the active shape type
+    const activeShapeOption = document.querySelector('.shape-option.active');
+    if (activeShapeOption) {
+      shapeSettings.type = activeShapeOption.getAttribute('data-shape');
+      currentShape = shapeSettings.type;
+    }
+  }
+}
+
+// Setup event listeners for drawing panel
+function setupDrawingPanelListeners() {
+  // Pen size slider
+  document.getElementById('penSize').addEventListener('input', (e) => {
+    document.getElementById('penSizeValue').textContent = e.target.value + 'px';
+  });
+  
+  // Pen opacity slider
+  document.getElementById('penOpacity').addEventListener('input', (e) => {
+    document.getElementById('penOpacityValue').textContent = e.target.value + '%';
+  });
+  
+  // Line size slider
+  document.getElementById('lineSize').addEventListener('input', (e) => {
+    document.getElementById('lineSizeValue').textContent = e.target.value + 'px';
+  });
+  
+  // Line opacity slider
+  document.getElementById('lineOpacity').addEventListener('input', (e) => {
+    document.getElementById('lineOpacityValue').textContent = e.target.value + '%';
+  });
+  
+  // Eraser size slider
+  document.getElementById('eraserSize').addEventListener('input', (e) => {
+    document.getElementById('eraserSizeValue').textContent = e.target.value + 'px';
+  });
+  
+  // Shape stroke size slider
+  document.getElementById('shapeStrokeSize').addEventListener('input', (e) => {
+    document.getElementById('shapeStrokeSizeValue').textContent = e.target.value + 'px';
+  });
+  
+  // Shape options click handlers
+  document.querySelectorAll('.shape-option').forEach(option => {
+    option.addEventListener('click', () => {
+      document.querySelectorAll('.shape-option').forEach(o => o.classList.remove('active'));
+      option.classList.add('active');
+      shapeSettings.type = option.getAttribute('data-shape');
+    });
+  });
+  
+  // Tab switching for drawing panel
+  document.querySelectorAll('.drawing-panel .tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      // Remove active class from all tabs
+      document.querySelectorAll('.drawing-panel .tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.drawing-panel .tab-content').forEach(c => c.classList.remove('active'));
+      
+      // Add active class to current tab
+      btn.classList.add('active');
+      const tabId = btn.getAttribute('data-tab');
+      document.getElementById(tabId + 'Tab').classList.add('active');
+    });
+  });
+  
+  // Clear all drawings button
+  document.getElementById('clearAllDrawing').addEventListener('click', () => {
+    if (confirm('Are you sure you want to clear all drawings?')) {
+      // Save current state to history before clearing
+      drawingHistory.push([...shapes]);
+      redoStack = [];
+      
+      shapes = [];
+      redrawCanvas();
+    }
+  });
+  
+  // Undo drawing action
+  document.getElementById('undoDrawing').addEventListener('click', () => {
+    if (drawingHistory.length > 0) {
+      redoStack.push([...shapes]);
+      shapes = drawingHistory.pop();
+      redrawCanvas();
+    }
+  });
+  
+  // Redo drawing action
+  document.getElementById('redoDrawing').addEventListener('click', () => {
+    if (redoStack.length > 0) {
+      drawingHistory.push([...shapes]);
+      shapes = redoStack.pop();
+      redrawCanvas();
+    }
+  });
+  
+  // Apply drawing settings and close panel
+  document.getElementById('applyDrawingSettings').addEventListener('click', () => {
+    readDrawingPanelValues();
+    drawingMode = true;
+    canvas.style.pointerEvents = 'auto';
+    quill.enable(false);
+    document.getElementById('drawingPanel').style.display = 'none';
+    updateDrawingButtons();
+  });
+  
+  // Close drawing panel without applying
+  document.getElementById('closeDrawingPanel').addEventListener('click', () => {
+    document.getElementById('drawingPanel').style.display = 'none';
+  });
+}
 
 // Function to update active state of drawing buttons
 function updateDrawingButtons() {
   const freehandBtn = document.getElementById('toggleDraw');
   const lineBtn = document.getElementById('drawLine');
   const eraserBtn = document.getElementById('clearDrawing');
+  const textBtn = document.getElementById('toggleTextMode');
+  
   // Remove active class from all
   freehandBtn.classList.remove('active');
   lineBtn.classList.remove('active');
   eraserBtn.classList.remove('active');
+  textBtn.classList.remove('active');
 
-  if (!drawingMode) return;
+  if (!drawingMode) {
+    textBtn.classList.add('active');
+    return;
+  }
 
   if (currentShape === 'freehand') {
     freehandBtn.classList.add('active');
@@ -218,183 +603,556 @@ function updateDrawingButtons() {
   }
 }
 
-// Freehand drawing toggle button – prompts for freehand settings
+// Call setup when the page loads
+window.addEventListener('load', setupDrawingPanelListeners);
+
+// Update the existing drawing button event listeners to open the panel
+
+// Replace existing toggleDraw event listener
 document.getElementById('toggleDraw').addEventListener('click', () => {
-  drawingMode = true;
-  canvas.style.pointerEvents = 'auto';
-  quill.enable(false);
-  const widthInput = prompt("Enter freehand line width (in pixels):", "2");
-  const colorInput = prompt("Enter freehand line color (hex, e.g. #000000):", "#000000");
-  if (widthInput !== null && !isNaN(widthInput) && widthInput.trim() !== "") {
-    customFreehandLineWidth = parseInt(widthInput, 10);
+  if (drawingMode && currentShape === 'freehand') {
+    // Drawing is already active - turn it off
+    drawingMode = false;
+    canvas.style.pointerEvents = 'none';
+    quill.enable(true);
+    updateDrawingButtons();
+    return;
   }
-  if (colorInput !== null && colorInput.trim() !== "") {
-    customFreehandLineColor = colorInput;
-  }
+  
+  // Turn on drawing mode with pen
   currentShape = 'freehand';
-  updateDrawingButtons();
+  document.getElementById('drawingPanel').style.display = 'block';
+  
+  // Make sure pen tab is active
+  document.querySelectorAll('.drawing-panel .tab-btn').forEach(btn => {
+    btn.classList.remove('active');
+    if (btn.getAttribute('data-tab') === 'pen') {
+      btn.classList.add('active');
+    }
+  });
+  
+  document.querySelectorAll('.drawing-panel .tab-content').forEach(content => {
+    content.classList.remove('active');
+    if (content.id === 'penTab') {
+      content.classList.add('active');
+    }
+  });
+  
+  updateDrawingPanelUI();
 });
 
-// Straight line button – prompts for line settings
+// Replace existing drawLine event listener
 document.getElementById('drawLine').addEventListener('click', () => {
-  drawingMode = true;
-  canvas.style.pointerEvents = 'auto';
-  quill.enable(false);
-  const widthInput = prompt("Enter the line width (in pixels):", "2");
-  const colorInput = prompt("Enter the line color (hex format, e.g. #ff0000):", "#000000");
-  if (widthInput !== null && !isNaN(widthInput) && widthInput.trim() !== "") {
-    customLineWidth = parseInt(widthInput, 10);
+  if (drawingMode && currentShape === 'line') {
+    // Line drawing is already active - turn it off
+    drawingMode = false;
+    canvas.style.pointerEvents = 'none';
+    quill.enable(true);
+    updateDrawingButtons();
+    return;
   }
-  if (colorInput !== null && colorInput.trim() !== "") {
-    customLineColor = colorInput;
-  }
+  
+  // Turn on line drawing mode
   currentShape = 'line';
-  updateDrawingButtons();
+  document.getElementById('drawingPanel').style.display = 'block';
+  
+  // Make sure line tab is active
+  document.querySelectorAll('.drawing-panel .tab-btn').forEach(btn => {
+    btn.classList.remove('active');
+    if (btn.getAttribute('data-tab') === 'line') {
+      btn.classList.add('active');
+    }
+  });
+  
+  document.querySelectorAll('.drawing-panel .tab-content').forEach(content => {
+    content.classList.remove('active');
+    if (content.id === 'lineTab') {
+      content.classList.add('active');
+    }
+  });
+  
+  updateDrawingPanelUI();
 });
 
-// Eraser button – toggle eraser mode; if a stroke is in progress, finish it
+// Replace existing clearDrawing (eraser) event listener
 document.getElementById('clearDrawing').addEventListener('click', () => {
+  if (drawingMode && currentShape === 'eraser') {
+    // Eraser is already active - turn it off
+    drawingMode = false;
+    canvas.style.pointerEvents = 'none';
+    quill.enable(true);
+    updateDrawingButtons();
+    return;
+  }
+  
   if (isDrawing) {
     isDrawing = false;
     // Save the current stroke before switching modes
     shapes.push({
       type: currentShape,
       path: currentPath.slice(),
-      lineWidth: (currentShape === 'eraser') ? eraserLineWidth : undefined
+      lineWidth: (currentShape === 'eraser') ? eraserSettings.size : undefined
     });
     currentPath = [];
+    // Save state to history
+    drawingHistory.push([...shapes]);
+    redoStack = [];
   }
-  drawingMode = true;
-  canvas.style.pointerEvents = 'auto';
-  quill.enable(false);
-  // Toggle eraser mode
-  currentShape = (currentShape === 'eraser') ? 'freehand' : 'eraser';
-  updateDrawingButtons();
+  
+  currentShape = 'eraser';
+  document.getElementById('drawingPanel').style.display = 'block';
+  
+  // Make sure eraser tab is active
+  document.querySelectorAll('.drawing-panel .tab-btn').forEach(btn => {
+    btn.classList.remove('active');
+    if (btn.getAttribute('data-tab') === 'eraser') {
+      btn.classList.add('active');
+    }
+  });
+  
+  document.querySelectorAll('.drawing-panel .tab-content').forEach(content => {
+    content.classList.remove('active');
+    if (content.id === 'eraserTab') {
+      content.classList.add('active');
+    }
+  });
+  
+  updateDrawingPanelUI();
 });
 
-// Toggle text mode – disables drawing mode and re-enables Quill
-document.getElementById('toggleTextMode').addEventListener('click', () => {
-  drawingMode = false;
-  canvas.style.pointerEvents = 'none';
-  quill.enable(true);
-  updateDrawingButtons();
-});
-
-// Canvas event listeners
+// Enhanced canvas event listeners to handle new shape types
 canvas.addEventListener('mousedown', (e) => {
   if (!drawingMode) return;
-  isDrawing = true;
+  
   const rect = canvas.getBoundingClientRect();
-  startX = e.clientX - rect.left;
-  startY = e.clientY - rect.top;
-  if (currentShape === 'freehand' || currentShape === 'eraser') {
-    currentPath = [{ x: startX, y: startY }];
+  const clickX = e.clientX - rect.left;
+  const clickY = e.clientY - rect.top;
+  
+  // If not currently drawing, check if we clicked on a shape
+  if (!isDrawing) {
+    // Check in reverse order (newest shapes first)
+    for (let i = shapes.length - 1; i >= 0; i--) {
+      if (isPointInShape(clickX, clickY, shapes[i])) {
+        selectedShapeIndex = i;
+        
+        // Initialize dragging
+        isDragging = true;
+        dragStartX = clickX;
+        dragStartY = clickY;
+        
+        redrawCanvas(); // Redraw to show selection
+        return;
+      }
+    }
+    // If we get here, no shape was clicked
+    selectedShapeIndex = -1;
+  }
+  
+  if (!isDragging) {
+    isDrawing = true;
+    startX = clickX;
+    startY = clickY;
+    
+    // Save the current state for undo
+    drawingHistory.push([...shapes]);
+    redoStack = [];
+    
+    if (currentShape === 'freehand' || currentShape === 'eraser') {
+      currentPath = [{ x: startX, y: startY }];
+    }
   }
 });
 
 canvas.addEventListener('mousemove', (e) => {
-  if (!drawingMode || !isDrawing) return;
+  if (!drawingMode) return;
+  
   const rect = canvas.getBoundingClientRect();
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
-  redrawCanvas();
-  if (currentShape === 'freehand' || currentShape === 'eraser') {
-    currentPath.push({ x, y });
-    drawFreehand(currentPath, currentShape);
-  } else if (currentShape === 'line') {
-    drawPreviewShape(startX, startY, x, y, 'line');
+  
+  // Handle shape dragging
+  if (isDragging && selectedShapeIndex !== -1) {
+    const deltaX = x - dragStartX;
+    const deltaY = y - dragStartY;
+    
+    // Move the selected shape
+    const shape = shapes[selectedShapeIndex];
+    moveShape(shape, deltaX, deltaY);
+    
+    // Update drag start position
+    dragStartX = x;
+    dragStartY = y;
+    
+    redrawCanvas();
+    return;
+  }
+  
+  // Handle drawing
+  if (isDrawing) {
+    redrawCanvas();
+    
+    if (currentShape === 'freehand' || currentShape === 'eraser') {
+      currentPath.push({ x, y });
+      drawFreehand(currentPath, currentShape);
+    } else if (currentShape === 'line') {
+      drawLine(startX, startY, x, y, lineSettings);
+    } else if (currentShape === 'rectangle') {
+      drawRectangle(startX, startY, x, y, shapeSettings);
+    } else if (currentShape === 'circle') {
+      drawCircle(startX, startY, x, y, shapeSettings);
+    } else if (currentShape === 'triangle') {
+      drawTriangle(startX, startY, x, y, shapeSettings);
+    } else if (currentShape === 'arrow') {
+      drawArrow(startX, startY, x, y, shapeSettings);
+    }
   }
 });
 
 canvas.addEventListener('mouseup', (e) => {
-  if (!drawingMode || !isDrawing) return;
+  if (!drawingMode) return;
+  
+  // Handle drag end
+  if (isDragging) {
+    isDragging = false;
+    
+    // Save state to history after drag completion
+    drawingHistory.push([...shapes]);
+    redoStack = [];
+    return;
+  }
+  
+  if (!isDrawing) return;
   isDrawing = false;
   const rect = canvas.getBoundingClientRect();
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
+  
   let shape;
+  
   if (currentShape === 'freehand') {
-    shape = { type: 'freehand', path: currentPath.slice(), lineWidth: customFreehandLineWidth, lineColor: customFreehandLineColor };
+    shape = { 
+      type: 'freehand', 
+      path: currentPath.slice(), 
+      lineWidth: penSettings.size, 
+      lineColor: applyOpacity(penSettings.color, penSettings.opacity),
+      style: penSettings.style
+    };
   } else if (currentShape === 'line') {
-    shape = { type: 'line', startX, startY, endX: x, endY: y, lineWidth: customLineWidth, lineColor: customLineColor };
+    shape = { 
+      type: 'line', 
+      startX, startY, 
+      endX: x, endY: y, 
+      lineWidth: lineSettings.size, 
+      lineColor: applyOpacity(lineSettings.color, lineSettings.opacity),
+      style: lineSettings.style,
+      arrow: lineSettings.arrow
+    };
   } else if (currentShape === 'eraser') {
-    shape = { type: 'eraser', path: currentPath.slice(), lineWidth: eraserLineWidth };
+    shape = { 
+      type: 'eraser', 
+      path: currentPath.slice(), 
+      lineWidth: eraserSettings.size,
+      precise: eraserSettings.precise
+    };
+  } else if (currentShape === 'rectangle' || currentShape === 'circle' || 
+             currentShape === 'triangle' || currentShape === 'arrow') {
+    shape = {
+      type: currentShape,
+      startX, startY,
+      endX: x, endY: y,
+      strokeWidth: shapeSettings.strokeSize,
+      strokeColor: shapeSettings.strokeColor,
+      fillColor: shapeSettings.fillColor,
+      filled: shapeSettings.filled
+    };
   }
+  
   shapes.push(shape);
   redrawCanvas();
 });
 
-canvas.addEventListener('mouseleave', (e) => {
-  if (isDrawing) {
-    isDrawing = false;
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    let shape;
-    if (currentShape === 'freehand') {
-      shape = { type: 'freehand', path: currentPath.slice(), lineWidth: customFreehandLineWidth, lineColor: customFreehandLineColor };
-    } else if (currentShape === 'line') {
-      shape = { type: 'line', startX, startY, endX: x, endY: y, lineWidth: customLineWidth, lineColor: customLineColor };
-    } else if (currentShape === 'eraser') {
-      shape = { type: 'eraser', path: currentPath.slice(), lineWidth: eraserLineWidth };
-    }
-    shapes.push(shape);
-    redrawCanvas();
-  }
-});
+// Helper function to apply opacity to a color
+function applyOpacity(color, opacity) {
+  if (opacity === 100) return color;
+  
+  // Convert hex to rgba
+  let r = parseInt(color.substr(1, 2), 16);
+  let g = parseInt(color.substr(3, 2), 16);
+  let b = parseInt(color.substr(5, 2), 16);
+  
+  return `rgba(${r}, ${g}, ${b}, ${opacity / 100})`;
+}
 
-// drawFreehand: uses custom freehand settings or, in eraser mode, destination-out.
-function drawFreehand(path, mode = 'freehand') {
+// Enhanced drawing functions for different shapes and styles
+function drawFreehand(path, mode = 'freehand', lineWidth, lineColor, lineStyle, isSelected) {
   if (path.length < 2) return;
+  
   ctx.save();
   if (mode === 'eraser') {
     ctx.globalCompositeOperation = 'destination-out';
-    ctx.lineWidth = eraserLineWidth;
+    ctx.lineWidth = lineWidth || eraserSettings.size;
   } else {
     ctx.globalCompositeOperation = 'source-over';
-    ctx.lineWidth = customFreehandLineWidth;
-    ctx.strokeStyle = customFreehandLineColor;
+    ctx.lineWidth = lineWidth || penSettings.size;
+    ctx.strokeStyle = lineColor || applyOpacity(penSettings.color, penSettings.opacity);
+    
+    // Apply line style
+    const style = lineStyle || penSettings.style;
+    if (style === 'dashed') {
+      ctx.setLineDash([ctx.lineWidth * 2, ctx.lineWidth]);
+    } else if (style === 'dotted') {
+      ctx.setLineDash([ctx.lineWidth, ctx.lineWidth * 1.5]);
+    } else {
+      ctx.setLineDash([]);
+    }
   }
+  
   ctx.beginPath();
   ctx.moveTo(path[0].x, path[0].y);
   for (let i = 1; i < path.length; i++) {
     ctx.lineTo(path[i].x, path[i].y);
   }
   ctx.stroke();
+  
+  // Draw selection indicator if this shape is selected
+  if (isSelected) {
+    ctx.strokeStyle = '#4361ee';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+    ctx.stroke();
+  }
+  
   ctx.restore();
 }
 
-// drawShape: draws straight lines with given settings.
-function drawShape(x1, y1, x2, y2, type, lineWidth, lineColor) {
+function drawLine(x1, y1, x2, y2, settings, isSelected) {
   ctx.save();
   ctx.globalCompositeOperation = 'source-over';
-  ctx.lineWidth = lineWidth || 2;
-  ctx.strokeStyle = lineColor || "#000";
+  ctx.lineWidth = settings.size;
+  ctx.strokeStyle = applyOpacity(settings.color, settings.opacity);
+  
+  // Apply line style
+  if (settings.style === 'dashed') {
+    ctx.setLineDash([settings.size * 2, settings.size]);
+  } else if (settings.style === 'dotted') {
+    ctx.setLineDash([settings.size, settings.size * 1.5]);
+  } else {
+    ctx.setLineDash([]);
+  }
+  
   ctx.beginPath();
-  if (type === 'line') {
     ctx.moveTo(x1, y1);
     ctx.lineTo(x2, y2);
-  }
   ctx.stroke();
+  
+  // Draw selection indicator if this shape is selected
+  if (isSelected) {
+    ctx.strokeStyle = '#4361ee';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+    ctx.stroke();
+  }
+  
+  // Draw arrow if needed
+  if (settings.arrow !== 'none') {
+    const arrowSize = settings.size * 5;
+    const angle = Math.atan2(y2 - y1, x2 - x1);
+    
+    if (settings.arrow === 'end' || settings.arrow === 'both') {
+      drawArrowhead(x2, y2, angle, arrowSize, settings.color, settings.opacity);
+    }
+    
+    if (settings.arrow === 'start' || settings.arrow === 'both') {
+      drawArrowhead(x1, y1, angle + Math.PI, arrowSize, settings.color, settings.opacity);
+    }
+  }
+  
   ctx.restore();
 }
 
-// drawPreviewShape: for straight line preview.
-function drawPreviewShape(x1, y1, x2, y2, type) {
-  drawShape(x1, y1, x2, y2, type, customLineWidth, customLineColor);
+function drawArrowhead(x, y, angle, size, color, opacity) {
+  ctx.save();
+  ctx.fillStyle = applyOpacity(color, opacity);
+  
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(-size, -size / 2);
+  ctx.lineTo(-size, size / 2);
+  ctx.closePath();
+  ctx.fill();
+  
+  ctx.restore();
 }
 
-// redrawCanvas: clear canvas and draw shapes in order.
-// It first draws freehand and line shapes, then applies eraser strokes.
+function drawRectangle(x1, y1, x2, y2, settings, isSelected) {
+  const width = x2 - x1;
+  const height = y2 - y1;
+  
+  ctx.save();
+  ctx.lineWidth = settings.strokeSize;
+  ctx.strokeStyle = settings.strokeColor;
+  
+  if (settings.filled) {
+    ctx.fillStyle = settings.fillColor;
+  }
+  
+  ctx.beginPath();
+  ctx.rect(x1, y1, width, height);
+  
+  if (settings.filled) {
+    ctx.fill();
+  }
+  
+  ctx.stroke();
+  
+  // Draw selection indicator if this shape is selected
+  if (isSelected) {
+    ctx.strokeStyle = '#4361ee';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+    ctx.stroke();
+  }
+  
+  ctx.restore();
+}
+
+function drawCircle(x1, y1, x2, y2, settings, isSelected) {
+  const radius = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+  
+  ctx.save();
+  ctx.lineWidth = settings.strokeSize;
+  ctx.strokeStyle = settings.strokeColor;
+  
+  if (settings.filled) {
+    ctx.fillStyle = settings.fillColor;
+  }
+  
+  ctx.beginPath();
+  ctx.arc(x1, y1, radius, 0, Math.PI * 2);
+  
+  if (settings.filled) {
+    ctx.fill();
+  }
+  
+  ctx.stroke();
+  
+  // Draw selection indicator if this shape is selected
+  if (isSelected) {
+    ctx.strokeStyle = '#4361ee';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+    ctx.stroke();
+  }
+  
+  ctx.restore();
+}
+
+function drawTriangle(x1, y1, x2, y2, settings, isSelected) {
+  // Calculate triangle points
+  const height = y2 - y1;
+  const width = x2 - x1;
+  
+  ctx.save();
+  ctx.lineWidth = settings.strokeSize;
+  ctx.strokeStyle = settings.strokeColor;
+  
+  if (settings.filled) {
+    ctx.fillStyle = settings.fillColor;
+  }
+  
+  ctx.beginPath();
+  ctx.moveTo(x1, y2); // Bottom-left
+  ctx.lineTo(x1 + width / 2, y1); // Top-middle
+  ctx.lineTo(x2, y2); // Bottom-right
+  ctx.closePath();
+  
+  if (settings.filled) {
+    ctx.fill();
+  }
+  
+  ctx.stroke();
+  
+  // Draw selection indicator if this shape is selected
+  if (isSelected) {
+    ctx.strokeStyle = '#4361ee';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+    ctx.stroke();
+  }
+  
+  ctx.restore();
+}
+
+function drawArrow(x1, y1, x2, y2, settings, isSelected) {
+  const angle = Math.atan2(y2 - y1, x2 - x1);
+  const length = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+  const arrowSize = Math.min(settings.strokeSize * 5, length / 3);
+  
+  ctx.save();
+  ctx.lineWidth = settings.strokeSize;
+  ctx.strokeStyle = settings.strokeColor;
+  
+  if (settings.filled) {
+    ctx.fillStyle = settings.fillColor;
+  }
+  
+  // Draw line
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+  
+  // Draw arrowhead
+  ctx.translate(x2, y2);
+  ctx.rotate(angle);
+  
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(-arrowSize, -arrowSize / 2);
+  ctx.lineTo(-arrowSize, arrowSize / 2);
+  ctx.closePath();
+  
+  if (settings.filled) {
+    ctx.fill();
+  } else {
+    ctx.stroke();
+  }
+  
+  // Draw selection indicator if this shape is selected
+  if (isSelected) {
+    ctx.strokeStyle = '#4361ee';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+    ctx.stroke();
+  }
+  
+  ctx.restore();
+}
+
+// Enhanced redrawCanvas function
 function redrawCanvas() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  // Draw freehand and line shapes in the order added
+  
+  // Draw shapes based on their type
   shapes.forEach(shape => {
     if (shape.type === 'freehand') {
       ctx.save();
       ctx.globalCompositeOperation = 'source-over';
-      ctx.lineWidth = shape.lineWidth || customFreehandLineWidth;
-      ctx.strokeStyle = shape.lineColor || customFreehandLineColor;
+      ctx.lineWidth = shape.lineWidth || penSettings.size;
+      ctx.strokeStyle = shape.lineColor || applyOpacity(penSettings.color, penSettings.opacity);
+      
+      // Apply line style
+      if (shape.style === 'dashed') {
+        ctx.setLineDash([shape.lineWidth * 2, shape.lineWidth]);
+      } else if (shape.style === 'dotted') {
+        ctx.setLineDash([shape.lineWidth, shape.lineWidth * 1.5]);
+      } else {
+        ctx.setLineDash([]);
+      }
+      
       ctx.beginPath();
       ctx.moveTo(shape.path[0].x, shape.path[0].y);
       for (let i = 1; i < shape.path.length; i++) {
@@ -403,15 +1161,85 @@ function redrawCanvas() {
       ctx.stroke();
       ctx.restore();
     } else if (shape.type === 'line') {
-      drawShape(shape.startX, shape.startY, shape.endX, shape.endY, 'line', shape.lineWidth, shape.lineColor);
+      drawLine(
+        shape.startX, 
+        shape.startY, 
+        shape.endX, 
+        shape.endY, 
+        {
+          size: shape.lineWidth || lineSettings.size,
+          color: shape.lineColor || lineSettings.color,
+          opacity: lineSettings.opacity,
+          style: shape.style || lineSettings.style,
+          arrow: shape.arrow || lineSettings.arrow
+        },
+        selectedShapeIndex === shapes.indexOf(shape)
+      );
+    } else if (shape.type === 'rectangle') {
+      drawRectangle(
+        shape.startX,
+        shape.startY,
+        shape.endX,
+        shape.endY,
+        {
+          strokeSize: shape.strokeWidth || shapeSettings.strokeSize,
+          strokeColor: shape.strokeColor || shapeSettings.strokeColor,
+          fillColor: shape.fillColor || shapeSettings.fillColor,
+          filled: shape.filled !== undefined ? shape.filled : shapeSettings.filled
+        },
+        selectedShapeIndex === shapes.indexOf(shape)
+      );
+    } else if (shape.type === 'circle') {
+      drawCircle(
+        shape.startX,
+        shape.startY,
+        shape.endX,
+        shape.endY,
+        {
+          strokeSize: shape.strokeWidth || shapeSettings.strokeSize,
+          strokeColor: shape.strokeColor || shapeSettings.strokeColor,
+          fillColor: shape.fillColor || shapeSettings.fillColor,
+          filled: shape.filled !== undefined ? shape.filled : shapeSettings.filled
+        },
+        selectedShapeIndex === shapes.indexOf(shape)
+      );
+    } else if (shape.type === 'triangle') {
+      drawTriangle(
+        shape.startX,
+        shape.startY,
+        shape.endX,
+        shape.endY,
+        {
+          strokeSize: shape.strokeWidth || shapeSettings.strokeSize,
+          strokeColor: shape.strokeColor || shapeSettings.strokeColor,
+          fillColor: shape.fillColor || shapeSettings.fillColor,
+          filled: shape.filled !== undefined ? shape.filled : shapeSettings.filled
+        },
+        selectedShapeIndex === shapes.indexOf(shape)
+      );
+    } else if (shape.type === 'arrow') {
+      drawArrow(
+        shape.startX,
+        shape.startY,
+        shape.endX,
+        shape.endY,
+        {
+          strokeSize: shape.strokeWidth || shapeSettings.strokeSize,
+          strokeColor: shape.strokeColor || shapeSettings.strokeColor,
+          fillColor: shape.fillColor || shapeSettings.fillColor,
+          filled: shape.filled !== undefined ? shape.filled : shapeSettings.filled
+        },
+        selectedShapeIndex === shapes.indexOf(shape)
+      );
     }
   });
-  // Then apply eraser strokes
+  
+  // Apply eraser strokes last
   shapes.forEach(shape => {
     if (shape.type === 'eraser') {
       ctx.save();
       ctx.globalCompositeOperation = 'destination-out';
-      ctx.lineWidth = shape.lineWidth;
+      ctx.lineWidth = shape.lineWidth || eraserSettings.size;
       ctx.beginPath();
       ctx.moveTo(shape.path[0].x, shape.path[0].y);
       for (let i = 1; i < shape.path.length; i++) {
@@ -435,14 +1263,14 @@ function createPdf() {
   ];
   handles.forEach(h => h.style.display = "none");
 
-  // Uložte pôvodné background-image a border z paperEl
+  // Save the original background-image and border from paperEl
   const oldBgImage = paperEl.style.backgroundImage;
-  paperEl.style.backgroundImage = "none"; // odstráni gradient
+  paperEl.style.backgroundImage = "none"; // removes gradient
 
-  // Získajte computed backgroundColor
+  // Get computed backgroundColor
   const computedBg = window.getComputedStyle(paperEl).backgroundColor;
 
-  // Odstráňte border z editora (ako v pôvodnom kóde)
+  // Remove border from editor (as in original code)
   const editorEl = document.querySelector(".ql-container");
   const oldBorder = editorEl.style.border;
   editorEl.style.border = "none";
@@ -450,7 +1278,7 @@ function createPdf() {
   setTimeout(() => {
     html2canvas(paperEl, { backgroundColor: computedBg })
       .then(canvas => {
-        // Obnovte pôvodné nastavenia
+        // Restore original settings
         handles.forEach(h => h.style.display = "");
         editorEl.style.border = oldBorder;
         paperEl.style.backgroundImage = oldBgImage;
@@ -519,20 +1347,73 @@ window.addEventListener('load', () => {
   });  
 });
 
-// Editor settings
+// Editor settings - Expanded with heading colors
 let h1Size = 32, h2Size = 28, h3Size = 24, h4Size = 20, h5Size = 18, h6Size = 16;
 let normalSize = 14, indentSize = 20;
-let editorFontColor = "#000000", fontFamily = "Arial, sans-serif";
+let editorFontColor = "#000000";
+let h1Color = "#000000", h2Color = "#000000", h3Color = "#000000";
+let h4Color = "#000000", h5Color = "#000000", h6Color = "#000000";
+let linkColor = "#0000FF";
+let fontFamily = "Arial, sans-serif";
+let h1Font = "inherit";
+let headingWeight = "bold";
 
+// Tab navigation functionality
+const tabButtons = document.querySelectorAll('.tab-btn');
+const tabContents = document.querySelectorAll('.tab-content');
+
+tabButtons.forEach(btn => {
+  btn.addEventListener('click', () => {
+    // Remove active class from all tabs
+    tabButtons.forEach(b => b.classList.remove('active'));
+    tabContents.forEach(c => c.classList.remove('active'));
+    
+    // Add active class to current tab
+    btn.classList.add('active');
+    const tabId = btn.getAttribute('data-tab');
+    document.getElementById(tabId + 'Tab').classList.add('active');
+  });
+});
+
+// Settings panel toggle
 document.getElementById('settingsBtn').addEventListener('click', () => {
   document.getElementById('settingsPanel').style.display = "block";
+  loadSettings();
 });
 
 document.getElementById('closeSettings').addEventListener('click', () => {
   document.getElementById('settingsPanel').style.display = "none";
 });
 
+// Function to load current settings into the form
+function loadSettings() {
+  // Set form values from variables
+  document.getElementById('h1Size').value = h1Size;
+  document.getElementById('h2Size').value = h2Size;
+  document.getElementById('h3Size').value = h3Size;
+  document.getElementById('h4Size').value = h4Size;
+  document.getElementById('h5Size').value = h5Size;
+  document.getElementById('h6Size').value = h6Size;
+  document.getElementById('normalSize').value = normalSize;
+  document.getElementById('indent').value = indentSize;
+  
+  document.getElementById('fontColor').value = editorFontColor;
+  document.getElementById('h1Color').value = h1Color;
+  document.getElementById('h2Color').value = h2Color;
+  document.getElementById('h3Color').value = h3Color;
+  document.getElementById('h4Color').value = h4Color;
+  document.getElementById('h5Color').value = h5Color;
+  document.getElementById('h6Color').value = h6Color;
+  document.getElementById('linkColor').value = linkColor;
+  
+  document.getElementById('fontFamily').value = fontFamily;
+  document.getElementById('h1Font').value = h1Font;
+  document.getElementById('headingWeight').value = headingWeight;
+}
+
+// Apply editor settings on save
 document.getElementById('saveSettings').addEventListener('click', () => {
+  // Get values from form
   h1Size = parseInt(document.getElementById('h1Size').value, 10);
   h2Size = parseInt(document.getElementById('h2Size').value, 10);
   h3Size = parseInt(document.getElementById('h3Size').value, 10);
@@ -541,42 +1422,212 @@ document.getElementById('saveSettings').addEventListener('click', () => {
   h6Size = parseInt(document.getElementById('h6Size').value, 10);
   normalSize = parseInt(document.getElementById('normalSize').value, 10);
   indentSize = parseInt(document.getElementById('indent').value, 10);
+  
   editorFontColor = document.getElementById('fontColor').value;
+  h1Color = document.getElementById('h1Color').value;
+  h2Color = document.getElementById('h2Color').value;
+  h3Color = document.getElementById('h3Color').value;
+  h4Color = document.getElementById('h4Color').value;
+  h5Color = document.getElementById('h5Color').value;
+  h6Color = document.getElementById('h6Color').value;
+  linkColor = document.getElementById('linkColor').value;
+  
   fontFamily = document.getElementById('fontFamily').value;
-  const editorEl = document.getElementById('editor');
-  editorEl.style.color = editorFontColor;
-  editorEl.style.fontFamily = fontFamily;
-  editorEl.style.fontSize = normalSize + "px";
-  localStorage.setItem('editorSettings', JSON.stringify({
-    h1Size, h2Size, h3Size, h4Size, h5Size, h6Size,
-    normalSize, indentSize, editorFontColor, fontFamily
-  }));
+  h1Font = document.getElementById('h1Font').value;
+  headingWeight = document.getElementById('headingWeight').value;
+  
+  // Apply settings
+  updateEditorStyles();
+  
+  // Save to localStorage
+  saveSettingsToStorage();
+  
+  // Close settings panel
   document.getElementById('settingsPanel').style.display = "none";
 });
 
+// Reset settings to defaults
+document.getElementById('resetSettings').addEventListener('click', () => {
+  if (confirm('Are you sure you want to reset all settings to defaults?')) {
+    // Set default values
+    h1Size = 32; h2Size = 28; h3Size = 24; h4Size = 20; h5Size = 18; h6Size = 16;
+    normalSize = 14; indentSize = 20;
+    editorFontColor = "#000000";
+    h1Color = "#000000"; h2Color = "#000000"; h3Color = "#000000";
+    h4Color = "#000000"; h5Color = "#000000"; h6Color = "#000000";
+    linkColor = "#0000FF";
+    fontFamily = "Arial, sans-serif";
+    h1Font = "inherit";
+    headingWeight = "bold";
+    
+    // Update form and apply
+    loadSettings();
+    updateEditorStyles();
+    saveSettingsToStorage();
+  }
+});
+
+// Apply styles to the editor
+function updateEditorStyles() {
+  const editorEl = document.getElementById('editor');
+  
+  // Set base editor styles
+  editorEl.style.fontFamily = fontFamily;
+  editorEl.style.fontSize = normalSize + "px";
+  
+  // Create style element for custom styles
+  let styleEl = document.getElementById('editor-custom-styles');
+  if (!styleEl) {
+    styleEl = document.createElement('style');
+    styleEl.id = 'editor-custom-styles';
+    document.head.appendChild(styleEl);
+  }
+  
+  // Create CSS rules for heading styles
+  styleEl.textContent = `
+    .ql-editor h1 {
+      font-size: ${h1Size}px;
+      color: ${h1Color};
+      font-family: ${h1Font === 'inherit' ? fontFamily : h1Font};
+      font-weight: ${headingWeight};
+    }
+    .ql-editor h2 {
+      font-size: ${h2Size}px;
+      color: ${h2Color};
+      font-weight: ${headingWeight};
+    }
+    .ql-editor h3 {
+      font-size: ${h3Size}px;
+      color: ${h3Color};
+      font-weight: ${headingWeight};
+    }
+    .ql-editor h4 {
+      font-size: ${h4Size}px;
+      color: ${h4Color};
+      font-weight: ${headingWeight};
+    }
+    .ql-editor h5 {
+      font-size: ${h5Size}px;
+      color: ${h5Color};
+      font-weight: ${headingWeight};
+    }
+    .ql-editor h6 {
+      font-size: ${h6Size}px;
+      color: ${h6Color};
+      font-weight: ${headingWeight};
+    }
+    .ql-editor a {
+      color: ${linkColor};
+    }
+    .ql-editor p {
+      color: ${editorFontColor};
+      font-family: ${fontFamily};
+    }
+    .ql-editor li {
+      color: ${editorFontColor};
+    }
+  `;
+}
+
+// Update colors based on theme
+function updateEditorColors() {
+  const isDarkMode = document.body.classList.contains("dark");
+  const editorEl = document.getElementById('editor');
+  
+  if (isDarkMode) {
+    editorEl.style.color = "#f5f5f5";
+    
+    // Adjust the heading colors if they're too dark for dark mode
+    if (isColorTooDark(h1Color)) document.getElementById('h1Color').value = "#f5f5f5";
+    if (isColorTooDark(h2Color)) document.getElementById('h2Color').value = "#f5f5f5";
+    if (isColorTooDark(h3Color)) document.getElementById('h3Color').value = "#f5f5f5";
+    if (isColorTooDark(h4Color)) document.getElementById('h4Color').value = "#f5f5f5";
+    if (isColorTooDark(h5Color)) document.getElementById('h5Color').value = "#f5f5f5";
+    if (isColorTooDark(h6Color)) document.getElementById('h6Color').value = "#f5f5f5";
+  } else {
+    editorEl.style.color = editorFontColor;
+  }
+  
+  updateEditorStyles();
+}
+
+// Helper to check if a color is too dark for dark mode
+function isColorTooDark(hexColor) {
+  // Convert hex to RGB
+  const r = parseInt(hexColor.substr(1, 2), 16);
+  const g = parseInt(hexColor.substr(3, 2), 16);
+  const b = parseInt(hexColor.substr(5, 2), 16);
+  
+  // Calculate brightness (Luminance formula)
+  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+  return brightness < 50; // If brightness is less than 50, color is too dark
+}
+
+// Save settings to localStorage
+function saveSettingsToStorage() {
+  localStorage.setItem('editorSettings', JSON.stringify({
+    h1Size, h2Size, h3Size, h4Size, h5Size, h6Size,
+    normalSize, indentSize, 
+    editorFontColor, h1Color, h2Color, h3Color, h4Color, h5Color, h6Color, linkColor,
+    fontFamily, h1Font, headingWeight
+  }));
+}
+
+// Load settings from localStorage
 window.addEventListener('load', () => {
   const savedSettings = localStorage.getItem('editorSettings');
   if (savedSettings) {
     const settings = JSON.parse(savedSettings);
+    
+    // Load heading sizes
     h1Size = settings.h1Size; h2Size = settings.h2Size; h3Size = settings.h3Size;
     h4Size = settings.h4Size; h5Size = settings.h5Size; h6Size = settings.h6Size;
     normalSize = settings.normalSize; indentSize = settings.indentSize;
-    editorFontColor = settings.editorFontColor; fontFamily = settings.fontFamily;
-    document.getElementById('h1Size').value = h1Size;
-    document.getElementById('h2Size').value = h2Size;
-    document.getElementById('h3Size').value = h3Size;
-    document.getElementById('h4Size').value = h4Size;
-    document.getElementById('h5Size').value = h5Size;
-    document.getElementById('h6Size').value = h6Size;
-    document.getElementById('normalSize').value = normalSize;
-    document.getElementById('indent').value = indentSize;
-    document.getElementById('fontColor').value = editorFontColor;
-    document.getElementById('fontFamily').value = fontFamily;
-    const editorEl = document.getElementById('editor');
-    editorEl.style.color = editorFontColor;
-    editorEl.style.fontFamily = fontFamily;
-    editorEl.style.fontSize = normalSize + "px";
+    
+    // Load colors
+    editorFontColor = settings.editorFontColor;
+    if (settings.h1Color) h1Color = settings.h1Color;
+    if (settings.h2Color) h2Color = settings.h2Color;
+    if (settings.h3Color) h3Color = settings.h3Color;
+    if (settings.h4Color) h4Color = settings.h4Color;
+    if (settings.h5Color) h5Color = settings.h5Color;
+    if (settings.h6Color) h6Color = settings.h6Color;
+    if (settings.linkColor) linkColor = settings.linkColor;
+    
+    // Load fonts
+    fontFamily = settings.fontFamily;
+    if (settings.h1Font) h1Font = settings.h1Font;
+    if (settings.headingWeight) headingWeight = settings.headingWeight;
+    
+    // Load form and apply styles
+    loadSettings();
+    updateEditorStyles();
   }
+  
+  // Tool tooltips
+  const toolbarButtons = document.querySelectorAll('#toolbar button');
+  const altTextMapping = {
+    'ql-bold': 'Bold',
+    'ql-italic': 'Italic',
+    'ql-underline': 'Underline',
+    'ql-strike': 'Strike Through',
+    'ql-color': 'Text Color',
+    'ql-background': 'Background Color',
+    'ql-list': 'List',
+    'ql-indent': 'Indent',
+    'ql-align': 'Text Alignment',
+    'ql-link': 'Insert Link',
+    'ql-image': 'Insert Image',
+    'ql-video': 'Insert Video',
+    'ql-clean': 'Clear Formatting'
+  };
+  toolbarButtons.forEach(btn => {
+    for (const key in altTextMapping) {
+      if (btn.classList.contains(key) && !btn.title) {
+        btn.title = altTextMapping[key];
+      }
+    }
+  });
 });
 
 // Save as JSON
@@ -589,243 +1640,297 @@ document.getElementById('saveAsJSON').addEventListener('click', () => {
   saveAs(blob, "document.json");
 });
 
-document.getElementById('saveAsDocument').addEventListener('click', async () => {
-  const delta = quill.getContents();
-  const paragraphs = [];
-  
-  for (const op of delta.ops) {
-    if (typeof op.insert === "string") {
-      const lines = op.insert.split('\n');
-      lines.forEach((line, index) => {
-        if (line.length > 0 || index < lines.length - 1) {
-          paragraphs.push(new docx.Paragraph({
-            children: [new docx.TextRun(line)]
-          }));
-        }
-      });
-    } else if (op.insert.image) {
-      const base64Image = op.insert.image;
-      const base64Data = base64Image.includes(',') ? base64Image.split(',')[1] : base64Image;
-      const binaryString = atob(base64Data);
-      const len = binaryString.length;
-      const bytes = new Uint8Array(len);
-      for (let i = 0; i < len; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-      
-      const img = new Image();
-      img.src = base64Image;
-      await new Promise(resolve => {
-        img.onload = resolve;
-        img.onerror = resolve;
-      });
-      
-      const origWidth = img.naturalWidth;
-      const origHeight = img.naturalHeight;
-      
-      // A4 paper (približne)
-      const maxWidth = 210 * 3;   
-      const maxHeight = 297 * 3;  
-      
-      let scale = 1;
-      if (origWidth > maxWidth || origHeight > maxHeight) {
-        scale = Math.min(maxWidth / origWidth, maxHeight / origHeight);
-      }
-      const scaledWidth = Math.floor(origWidth * scale);
-      const scaledHeight = Math.floor(origHeight * scale);
-      
-      paragraphs.push(new docx.Paragraph({
-        children: [
-          new docx.ImageRun({
-            data: bytes,
-            transformation: { width: scaledWidth, height: scaledHeight }
-          })
-        ]
-      }));
-    }
-  }
-  
-  // Vypočítame bounding box nakresleného obsahu v canvas-e
-  const canvasElem = document.getElementById('drawingCanvas');
-  function getDrawingBoundingBox() {
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    shapes.forEach(shape => {
-      if (shape.type === 'freehand' || shape.type === 'eraser') {
-        shape.path.forEach(point => {
-          if (point.x < minX) minX = point.x;
-          if (point.y < minY) minY = point.y;
-          if (point.x > maxX) maxX = point.x;
-          if (point.y > maxY) maxY = point.y;
-        });
-      } else if (shape.type === 'line') {
-        [shape.startX, shape.endX].forEach(x => {
-          if (x < minX) minX = x;
-          if (x > maxX) maxX = x;
-        });
-        [shape.startY, shape.endY].forEach(y => {
-          if (y < minY) minY = y;
-          if (y > maxY) maxY = y;
-        });
-      }
-    });
-    if (minX === Infinity) return null;
-    return { minX, minY, width: maxX - minX, height: maxY - minY };
-  }
-  
-  const bbox = getDrawingBoundingBox();
-  let exportCanvas;
-  if (bbox && bbox.width > 0 && bbox.height > 0) {
-    exportCanvas = document.createElement('canvas');
-    exportCanvas.width = bbox.width;
-    exportCanvas.height = bbox.height;
-    const exportCtx = exportCanvas.getContext('2d');
-    exportCtx.drawImage(canvasElem, bbox.minX, bbox.minY, bbox.width, bbox.height, 0, 0, bbox.width, bbox.height);
-  } else {
-    exportCanvas = canvasElem;
-  }
-  
-  // Konvertujeme vyrezaný (cropnutý) canvas na obrázok
-  const canvasDataUrl = exportCanvas.toDataURL();
-  const canvasBase64Data = canvasDataUrl.includes(',') ? canvasDataUrl.split(',')[1] : canvasDataUrl;
-  const canvasBinaryString = atob(canvasBase64Data);
-  const canvasLen = canvasBinaryString.length;
-  const canvasBytes = new Uint8Array(canvasLen);
-  for (let i = 0; i < canvasLen; i++) {
-    canvasBytes[i] = canvasBinaryString.charCodeAt(i);
-  }
-  
-  // Skalovanie vyrezaného canvasu
-  const croppedWidth = exportCanvas.width;
-  const croppedHeight = exportCanvas.height;
-  const maxCanvasWidth = 210 * 3;
-  const maxCanvasHeight = 297 * 3;
-  let canvasScale = 1;
-  if (croppedWidth > maxCanvasWidth || croppedHeight > maxCanvasHeight) {
-    canvasScale = Math.min(maxCanvasWidth / croppedWidth, maxCanvasHeight / croppedHeight);
-  }
-  const scaledCanvasWidth = Math.floor(croppedWidth * canvasScale);
-  const scaledCanvasHeight = Math.floor(croppedHeight * canvasScale);
-  
-  paragraphs.push(new docx.Paragraph({
-    children: [
-      new docx.ImageRun({
-        data: canvasBytes,
-        transformation: { width: scaledCanvasWidth, height: scaledCanvasHeight }
-      })
-    ]
-  }));
-  
-  const doc = new docx.Document({
-    sections: [{ children: paragraphs }]
-  });
-  
-  docx.Packer.toBlob(doc)
-    .then(blob => { saveAs(blob, "document.docx"); })
-    .catch(error => { console.error("Error generating DOCX:", error); });
-});
-
 // Open Document
 document.getElementById('openDocument').addEventListener('click', () => {
-  const openInput = document.createElement('input');
-  openInput.type = 'file';
-  openInput.accept = ".json,.docx";
-  openInput.style.display = 'none';
-  document.body.appendChild(openInput);
-  openInput.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const extension = file.name.split('.').pop().toLowerCase();
-    if (extension === "json") {
-      const reader = new FileReader();
-      reader.onload = function(event) {
-        try {
-          const savedData = JSON.parse(event.target.result);
-          if (savedData.delta) {
-            quill.setContents(savedData.delta);
-          }
-          if (savedData.canvas) {
-            const canvasElem = document.getElementById('drawingCanvas');
-            const ctx = canvasElem.getContext('2d');
-            const img = new Image();
-            img.src = savedData.canvas;
-            img.onload = function() {
-              ctx.clearRect(0, 0, canvasElem.width, canvasElem.height);
-              ctx.drawImage(img, 0, 0);
-            };
-          }
-        } catch (err) {
-          console.error("Error parsing JSON:", err);
-          alert("Failed to open JSON document.");
-        }
-      };
-      reader.readAsText(file);
-    } else if (extension === "docx") {
-      const reader = new FileReader();
-      reader.onload = function(event) {
-        const arrayBuffer = event.target.result;
-        mammoth.convertToHtml({ arrayBuffer: arrayBuffer })
-          .then(function(result) {
-            const html = result.value;
-            const range = quill.getSelection(true);
-            quill.clipboard.dangerouslyPasteHTML(range ? range.index : quill.getLength(), html);
-          })
-          .catch(function(err) {
-            console.error("Error converting DOCX to HTML:", err);
-          });
-      };
-      reader.readAsArrayBuffer(file);
-    } else {
-      alert("Unsupported file format.");
-    }
-    document.body.removeChild(openInput);
-  });
-  openInput.click();
+  document.getElementById('jsonInput').click();
 });
 
-
-// Inject a style into the document head to force the resizer to have red background
-(function() {
-  const style = document.createElement('style');
-  style.textContent = `
-    .resizer {
-      background: red !important;
-      position: absolute;
-      right: 0;
-      top: 0;
-      width: 5px;
-      height: 100%;
-      cursor: col-resize;
-      user-select: none;
-      z-index: 10;
+document.getElementById('jsonInput').addEventListener('change', function(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const content = JSON.parse(e.target.result);
+      
+      // Load document content (delta)
+      if (content.delta) {
+        quill.setContents(content.delta);
+      }
+      
+      // Load drawings from canvas
+      if (content.canvas) {
+        // Create temporary image for canvas loading
+        const img = new Image();
+        img.onload = function() {
+          // Clear shapes array to prevent duplication
+          shapes = [];
+          
+          // Set canvas to correct size
+          const canvas = document.getElementById('drawingCanvas');
+          const ctx = canvas.getContext('2d');
+          
+          // Clear canvas
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          
+          // Add drawings from loaded image
+          ctx.drawImage(img, 0, 0);
+        };
+        img.src = content.canvas;
+      }
+      
+      console.log("Document loaded successfully");
+    } catch (err) {
+      console.error("Error parsing JSON:", err);
+      alert("Error opening document. File may be corrupted.");
     }
-  `;
-  document.head.appendChild(style);
-})();
+  };
+  reader.readAsText(file);
+  // Reset file input value so the same file can be selected again if needed
+  this.value = '';
+});
 
 document.getElementById('insertTable').addEventListener('click', () => {
-  // Prompt for number of columns and rows
-  let cols = prompt("Enter number of columns", "3");
-  let rows = prompt("Enter number of rows", "2");
-
-  cols = parseInt(cols);
-  rows = parseInt(rows);
-  if (isNaN(cols) || isNaN(rows) || cols <= 0 || rows <= 0) {
-    alert("Please enter valid numbers greater than 0 for both columns and rows.");
-    return;
-  }
-
-  // Build table HTML without any resizer elements; table-layout remains default
-  let tableHTML = `<table border="1" style="border-collapse: collapse; width: 100%;">`;
-  for (let r = 0; r < rows; r++) {
-    tableHTML += "<tr>";
-    for (let c = 0; c < cols; c++) {
-      tableHTML += `<td>Cell ${r + 1}-${c + 1}</td>`;
+  // Initialize table modal
+  const tableModal = document.getElementById('tableModal');
+  const customRows = document.getElementById('customRows');
+  const customCols = document.getElementById('customCols');
+  const tableHeaderRow = document.getElementById('tableHeaderRow');
+  
+  // Set default values
+  customRows.value = 3;
+  customCols.value = 3;
+  tableHeaderRow.checked = false;
+  
+  // Display the modal
+  tableModal.style.display = 'flex';
+  
+  // Function to insert the table and close modal
+  function insertSelectedTable() {
+    const rows = parseInt(customRows.value);
+    const cols = parseInt(customCols.value);
+    const includeHeader = tableHeaderRow.checked;
+    
+    if (isNaN(rows) || isNaN(cols) || rows <= 0 || cols <= 0) {
+      alert("Please enter valid numbers greater than 0 for both columns and rows.");
+      return;
     }
-    tableHTML += "</tr>";
+    
+    // Build table HTML
+    let tableHTML = `<table border="1" style="border-collapse: collapse; width: 100%;">`;
+    
+    for (let r = 0; r < rows; r++) {
+      tableHTML += "<tr>";
+      for (let c = 0; c < cols; c++) {
+        // Use th for header row if checked
+        if (r === 0 && includeHeader) {
+          tableHTML += `<th>Header ${c + 1}</th>`;
+        } else {
+          tableHTML += `<td>${includeHeader ? 'Cell ' + (r) + '-' + (c + 1) : 'Cell ' + (r + 1) + '-' + (c + 1)}</td>`;
+        }
+      }
+      tableHTML += "</tr>";
+    }
+    tableHTML += "</table><p></p>";
+    
+    // Insert the table HTML into the Quill editor at the current selection
+    const range = quill.getSelection(true);
+    quill.clipboard.dangerouslyPasteHTML(range ? range.index : quill.getLength(), tableHTML);
+    
+    // Close the modal
+    tableModal.style.display = 'none';
   }
-  tableHTML += "</table><p></p>";
-
-  // Insert the table HTML into the Quill editor at the current selection
-  const range = quill.getSelection(true);
-  quill.clipboard.dangerouslyPasteHTML(range ? range.index : quill.getLength(), tableHTML);
+  
+  // Handle modal buttons
+  const insertTableBtn = document.getElementById('insertTableBtn');
+  const cancelTableBtn = document.getElementById('cancelTableBtn');
+  const closeTableModal = document.getElementById('closeTableModal');
+  
+  // Remove any existing event listeners to prevent duplicates
+  const newInsertBtn = insertTableBtn.cloneNode(true);
+  const newCancelBtn = cancelTableBtn.cloneNode(true);
+  const newCloseBtn = closeTableModal.cloneNode(true);
+  
+  insertTableBtn.parentNode.replaceChild(newInsertBtn, insertTableBtn);
+  cancelTableBtn.parentNode.replaceChild(newCancelBtn, cancelTableBtn);
+  closeTableModal.parentNode.replaceChild(newCloseBtn, closeTableModal);
+  
+  // Add event listeners to the new buttons
+  newInsertBtn.addEventListener('click', insertSelectedTable);
+  
+  newCancelBtn.addEventListener('click', () => {
+    tableModal.style.display = 'none';
+  });
+  
+  newCloseBtn.addEventListener('click', () => {
+    tableModal.style.display = 'none';
+  });
+  
+  // Close modal when clicking outside
+  tableModal.addEventListener('click', (e) => {
+    if (e.target === tableModal) {
+      tableModal.style.display = 'none';
+    }
+  });
+  
+  // Add keyboard event listeners for accessibility
+  tableModal.addEventListener('keydown', (e) => {
+    // Close on Escape key
+    if (e.key === 'Escape') {
+      tableModal.style.display = 'none';
+    }
+    // Insert on Enter key if focus is in the form
+    if (e.key === 'Enter' && 
+        (document.activeElement === customRows || 
+         document.activeElement === customCols ||
+         document.activeElement === tableHeaderRow)) {
+      insertSelectedTable();
+    }
+  });
 });
+
+// Add back the Toggle Text Mode event listener
+document.getElementById('toggleTextMode').addEventListener('click', () => {
+  drawingMode = false;
+  canvas.style.pointerEvents = 'none';
+  quill.enable(true);
+  updateDrawingButtons();
+});
+
+// Word count function
+function countWords() {
+  const text = quill.getText().trim();
+  const words = text.split(/\s+/).filter(word => word.length > 0);
+  const characters = text.replace(/\s/g, '').length;
+  const paragraphs = quill.getText().split('\n').filter(line => line.trim().length > 0).length;
+  
+  return {
+    words: words.length,
+    characters: characters,
+    paragraphs: paragraphs
+  };
+}
+
+// Connect function to word count button
+document.getElementById('wordCountBtn').addEventListener('click', () => {
+  const stats = countWords();
+  const message = `Word count: ${stats.words}\nCharacter count: ${stats.characters}\nParagraph count: ${stats.paragraphs}`;
+  alert(message);
+});
+
+// Function to check if a point is inside a shape
+function isPointInShape(x, y, shape) {
+  // Handle different shape types
+  if (shape.type === 'freehand' || shape.type === 'eraser') {
+    // For path-based shapes, check if point is near any line segment
+    for (let i = 1; i < shape.path.length; i++) {
+      const p1 = shape.path[i-1];
+      const p2 = shape.path[i];
+      const distance = distanceToSegment(x, y, p1.x, p1.y, p2.x, p2.y);
+      if (distance < shape.lineWidth + 5) {
+        return true;
+      }
+    }
+    return false;
+  } 
+  else if (shape.type === 'line') {
+    // For lines, check distance to the line segment
+    return distanceToSegment(x, y, shape.startX, shape.startY, shape.endX, shape.endY) < shape.lineWidth + 5;
+  } 
+  else if (shape.type === 'rectangle') {
+    // For rectangles, check if point is inside
+    const minX = Math.min(shape.startX, shape.endX);
+    const maxX = Math.max(shape.startX, shape.endX);
+    const minY = Math.min(shape.startY, shape.endY);
+    const maxY = Math.max(shape.startY, shape.endY);
+    return x >= minX && x <= maxX && y >= minY && y <= maxY;
+  } 
+  else if (shape.type === 'circle') {
+    // For circles, check distance to center
+    const distance = Math.sqrt(
+      Math.pow(x - shape.startX, 2) + 
+      Math.pow(y - shape.startY, 2)
+    );
+    const radius = Math.sqrt(
+      Math.pow(shape.endX - shape.startX, 2) + 
+      Math.pow(shape.endY - shape.startY, 2)
+    );
+    return distance <= radius;
+  } 
+  // Add other shape types as needed
+  
+  return false;
+}
+
+// Helper function to calculate distance from point to line segment
+function distanceToSegment(px, py, x1, y1, x2, y2) {
+  const A = px - x1;
+  const B = py - y1;
+  const C = x2 - x1;
+  const D = y2 - y1;
+
+  const dot = A * C + B * D;
+  const len_sq = C * C + D * D;
+  let param = -1;
+  
+  if (len_sq !== 0) {
+    param = dot / len_sq;
+  }
+
+  let xx, yy;
+
+  if (param < 0) {
+    xx = x1;
+    yy = y1;
+  } else if (param > 1) {
+    xx = x2;
+    yy = y2;
+  } else {
+    xx = x1 + param * C;
+    yy = y1 + param * D;
+  }
+
+  const dx = px - xx;
+  const dy = py - yy;
+  
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+// Add keyboard event listener for Delete key to remove selected shape
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Delete') {
+    if (drawingMode && selectedShapeIndex !== -1) {
+      // Save current state for undo
+      drawingHistory.push([...shapes]);
+      redoStack = [];
+      
+      // Remove the selected shape
+      shapes.splice(selectedShapeIndex, 1);
+      selectedShapeIndex = -1;
+      
+      // Redraw
+      redrawCanvas();
+      e.preventDefault(); // Prevent any default behavior
+    }
+  }
+});
+
+// Function to move a shape by delta values
+function moveShape(shape, deltaX, deltaY) {
+  if (shape.type === 'freehand' || shape.type === 'eraser') {
+    // Move each point in the path
+    for (let i = 0; i < shape.path.length; i++) {
+      shape.path[i].x += deltaX;
+      shape.path[i].y += deltaY;
+    }
+  } else if (shape.type === 'line' || shape.type === 'rectangle' || 
+             shape.type === 'circle' || shape.type === 'triangle' || 
+             shape.type === 'arrow') {
+    // Move start and end points
+    shape.startX += deltaX;
+    shape.startY += deltaY;
+    shape.endX += deltaX;
+    shape.endY += deltaY;
+  }
+}

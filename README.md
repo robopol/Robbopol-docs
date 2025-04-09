@@ -1,8 +1,7 @@
 # Robopol Docs
 
 A web-based document editor application built with **HTML**, **CSS**, and **JavaScript** (using the [Quill](https://quilljs.com/) editor). **Robopol Docs** provides a comprehensive set of text-editing features, including exporting to PDF, DOCX, and JSON, dynamic drawing on the document, and customizable settings for fonts, colors, and layouts.
-
----
+![Robopol docs](assets/screencapture-docs.png)
 
 ## Features
 
